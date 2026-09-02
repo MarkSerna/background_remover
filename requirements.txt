@@ -1,0 +1,11 @@
+rembg>=2.0.50
+pillow>=10.0.0
+pillow-heif>=0.13.0
+onnxruntime>=1.15.0
+python-dotenv>=1.0.0
+watchdog>=3.0.0
+tqdm>=4.65.0
+
+customtkinter>=5.2.0
+tkinterdnd2>=0.6.2
+pywin32>=306
