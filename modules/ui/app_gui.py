@@ -143,10 +143,10 @@ class BackgroundRemoverGUI:
     def _build_ui(self):
         page = self.page
 
-        # FilePickers
-        self.file_picker_input = ft.FilePicker()
-        self.file_picker_output = ft.FilePicker()
-        page.overlay.extend([self.file_picker_input, self.file_picker_output])
+        # FilePicker registrado como servicio del ciclo de vida (no como control visual en overlay)
+        self.file_picker = ft.FilePicker()
+        if self.file_picker not in page.services:
+            page.services.append(self.file_picker)
 
         # 1. Header estilizado
         header = ft.Container(
@@ -329,19 +329,28 @@ class BackgroundRemoverGUI:
                     # Fila 1: Color y Formato
                     ft.Row(
                         controls=[
-                            ft.Text("2. Ajustes:", size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
-                            ft.Text("Fondo:", size=11, color=TEXT_MUTED),
-                            self.color_swatch,
-                            ft.OutlinedButton("Blanco", height=30, on_click=lambda _: self._set_preset_color("white", "#FFFFFF")),
-                            ft.OutlinedButton("PNG Transp.", height=30, on_click=lambda _: self._set_preset_color("transparent", "#1E293B")),
-                            ft.OutlinedButton("Personalizado", height=30, on_click=self._open_custom_color_dialog),
-                            ft.VerticalDivider(width=1, color=BORDER),
-                            ft.Text("Formato:", size=11, color=TEXT_MUTED),
-                            self.radio_format,
+                            ft.Row(
+                                controls=[
+                                    ft.Text("2. Ajustes:", size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                                    ft.Text("Fondo:", size=11, color=TEXT_MUTED),
+                                    self.color_swatch,
+                                    ft.OutlinedButton("Blanco", height=30, on_click=lambda _: self._set_preset_color("white", "#FFFFFF")),
+                                    ft.OutlinedButton("PNG Transp.", height=30, on_click=lambda _: self._set_preset_color("transparent", "#1E293B")),
+                                    ft.OutlinedButton("Personalizado", height=30, on_click=self._open_custom_color_dialog),
+                                ],
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                spacing=8,
+                            ),
+                            ft.Row(
+                                controls=[
+                                    ft.Text("Formato:", size=11, color=TEXT_MUTED),
+                                    self.radio_format,
+                                ],
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                spacing=8,
+                            ),
                         ],
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        wrap=True,
-                        spacing=8,
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     # Fila 2: Modelo + Checkboxes + Límite
                     ft.Row(
@@ -354,8 +363,7 @@ class BackgroundRemoverGUI:
                             self.chk_alpha_matting,
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        wrap=True,
-                        spacing=8,
+                        spacing=12,
                     ),
                     # Fila Advertencia
                     ft.Container(
@@ -691,7 +699,7 @@ class BackgroundRemoverGUI:
 
     async def _browse_input(self, e):
         if self.mode == "file":
-            files = await self.file_picker_input.pick_files(
+            files = await self.file_picker.pick_files(
                 dialog_title="Seleccionar imagen",
                 allowed_extensions=["jpg", "jpeg", "png", "webp", "bmp", "tiff", "heic", "heif", "HEIC", "HEIF"],
                 file_type=ft.FilePickerFileType.CUSTOM,
@@ -706,7 +714,7 @@ class BackgroundRemoverGUI:
                 if self.page:
                     self.page.update()
         else:
-            dir_path = await self.file_picker_input.get_directory_path(
+            dir_path = await self.file_picker.get_directory_path(
                 dialog_title="Seleccionar carpeta con imágenes",
             )
             if dir_path:
@@ -719,7 +727,7 @@ class BackgroundRemoverGUI:
                     self.page.update()
 
     async def _browse_output(self, e):
-        dir_path = await self.file_picker_output.get_directory_path(
+        dir_path = await self.file_picker.get_directory_path(
             dialog_title="Seleccionar carpeta de salida",
         )
         if dir_path:
