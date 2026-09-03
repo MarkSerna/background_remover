@@ -128,7 +128,7 @@ class BackgroundRemoverGUI:
 
         # Dimensiones optimizadas para pantallas estándar (768p / 800p / 900p / 1080p)
         page.window.width = 960
-        page.window.height = 750
+        page.window.height = 800
         page.window.min_width = 900
         page.window.min_height = 700
         page.window.resizable = True
@@ -561,7 +561,7 @@ class BackgroundRemoverGUI:
                                 border_radius=8,
                                 padding=6,
                                 expand=True,
-                                height=170,
+                                height=220,
                                 border=ft.Border.all(1, BORDER_COLOR),
                             ),
                             # Cuadro Imagen Resultado
@@ -599,7 +599,7 @@ class BackgroundRemoverGUI:
                                 border_radius=8,
                                 padding=6,
                                 expand=True,
-                                height=170,
+                                height=220,
                                 border=ft.Border.all(1, BORDER_COLOR),
                             ),
                         ],
