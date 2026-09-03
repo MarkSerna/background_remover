@@ -190,7 +190,7 @@ class BackgroundRemoverGUI:
 
         self.txt_input_path = ft.TextField(
             value=self.input_path,
-            placeholder_text="Seleccione o examine una imagen o carpeta...",
+            hint_text="Seleccione o examine una imagen o carpeta...",
             text_size=12,
             dense=True,
             expand=True,
@@ -201,7 +201,7 @@ class BackgroundRemoverGUI:
 
         self.txt_output_path = ft.TextField(
             value=self.output_dir,
-            placeholder_text="Carpeta de destino...",
+            hint_text="Carpeta de destino...",
             text_size=12,
             dense=True,
             expand=True,
@@ -297,7 +297,7 @@ class BackgroundRemoverGUI:
             width=210,
             bgcolor=SURFACE_INNER,
             border_color=BORDER,
-            on_change=self._on_model_change,
+            on_select=self._on_model_change,
         )
 
         self.txt_batch_limit = ft.TextField(
@@ -395,6 +395,7 @@ class BackgroundRemoverGUI:
         )
 
         self.img_orig_view = ft.Image(
+            src="",
             fit=ft.BoxFit.CONTAIN,
             visible=False,
             border_radius=6,
@@ -410,6 +411,7 @@ class BackgroundRemoverGUI:
         )
 
         self.img_res_view = ft.Image(
+            src="",
             fit=ft.BoxFit.CONTAIN,
             visible=False,
             border_radius=6,
@@ -654,9 +656,9 @@ class BackgroundRemoverGUI:
         self.mode = e.control.value
         self.mode_var.set(self.mode)
         if self.mode == "file":
-            self.txt_input_path.placeholder_text = "Seleccione una imagen (JPG, PNG, WEBP, HEIC, etc.)..."
+            self.txt_input_path.hint_text = "Seleccione una imagen (JPG, PNG, WEBP, HEIC, etc.)..."
         else:
-            self.txt_input_path.placeholder_text = "Seleccione una carpeta con imágenes..."
+            self.txt_input_path.hint_text = "Seleccione una carpeta con imágenes..."
         if self.page:
             self.page.update()
 
