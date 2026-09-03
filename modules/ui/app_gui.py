@@ -128,9 +128,9 @@ class BackgroundRemoverGUI:
 
         # Dimensiones optimizadas para pantallas estándar (768p / 800p / 900p / 1080p)
         page.window.width = 960
-        page.window.height = 800
+        page.window.height = 870
         page.window.min_width = 900
-        page.window.min_height = 700
+        page.window.min_height = 780
         page.window.resizable = True
         page.run_task(page.window.center)
 
@@ -561,7 +561,7 @@ class BackgroundRemoverGUI:
                                 border_radius=8,
                                 padding=6,
                                 expand=True,
-                                height=220,
+                                height=290,
                                 border=ft.Border.all(1, BORDER_COLOR),
                             ),
                             # Cuadro Imagen Resultado
@@ -599,7 +599,7 @@ class BackgroundRemoverGUI:
                                 border_radius=8,
                                 padding=6,
                                 expand=True,
-                                height=220,
+                                height=290,
                                 border=ft.Border.all(1, BORDER_COLOR),
                             ),
                         ],
@@ -718,7 +718,7 @@ class BackgroundRemoverGUI:
     # ------------------------------------------------------------------
     # Previsualización e imágenes
     # ------------------------------------------------------------------
-    def _pil_to_base64(self, pil_img: Image.Image, max_size=(500, 300)) -> str:
+    def _pil_to_base64(self, pil_img: Image.Image, max_size=(700, 450)) -> str:
         """Convierte una imagen PIL a base64 escalándola de forma nítida."""
         img = pil_img.copy()
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
