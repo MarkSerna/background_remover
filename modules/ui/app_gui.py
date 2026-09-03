@@ -223,7 +223,7 @@ class BackgroundRemoverGUI:
                 ft.Segment(value="file", label=ft.Text("Archivo individual"), icon=ft.Icon(ft.Icons.IMAGE_OUTLINED, size=16)),
                 ft.Segment(value="folder", label=ft.Text("Carpeta en Lote"), icon=ft.Icon(ft.Icons.FOLDER_SPECIAL_OUTLINED, size=16)),
             ],
-            selected={"file"},
+            selected=["file"],
             allow_multiple_selection=False,
             on_change=self._on_segmented_mode_change,
         )
@@ -328,7 +328,7 @@ class BackgroundRemoverGUI:
                 ft.Segment(value="PNG", label=ft.Text("PNG")),
                 ft.Segment(value="WEBP", label=ft.Text("WEBP")),
             ],
-            selected={self.output_format},
+            selected=[self.output_format],
             allow_multiple_selection=False,
             on_change=self._on_segmented_format_change,
         )
@@ -795,9 +795,9 @@ class BackgroundRemoverGUI:
     # Manejadores de eventos
     # ------------------------------------------------------------------
     def _on_segmented_mode_change(self, e):
-        selected_set = e.control.selected
-        if selected_set:
-            self.mode = list(selected_set)[0]
+        selected_val = e.control.selected
+        if selected_val:
+            self.mode = list(selected_val)[0] if isinstance(selected_val, (list, set)) else str(selected_val)
             self.mode_var.set(self.mode)
             if self.mode == "file":
                 self.txt_input_path.hint_text = "Seleccione una imagen compatible (JPG, PNG, WEBP, HEIC, etc.)..."
@@ -807,9 +807,9 @@ class BackgroundRemoverGUI:
                 self.page.update()
 
     def _on_segmented_format_change(self, e):
-        selected_set = e.control.selected
-        if selected_set:
-            self.output_format = list(selected_set)[0]
+        selected_val = e.control.selected
+        if selected_val:
+            self.output_format = list(selected_val)[0] if isinstance(selected_val, (list, set)) else str(selected_val)
             self.format_var.set(self.output_format)
 
     def _on_input_text_change(self, e):
@@ -884,7 +884,7 @@ class BackgroundRemoverGUI:
         if name == "transparent":
             self.output_format = "PNG"
             self.format_var.set("PNG")
-            self.seg_format.selected = {"PNG"}
+            self.seg_format.selected = ["PNG"]
         if self.page:
             self.page.update()
 
