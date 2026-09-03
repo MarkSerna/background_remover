@@ -85,6 +85,16 @@ def parse_args():
         help="Desactivar la proyección de sombras de contacto en modo studio.",
     )
     parser.add_argument(
+        "--no-enhance",
+        action="store_true",
+        help="Desactivar la graduación fotográfica (balance de blancos 5500K y despill).",
+    )
+    parser.add_argument(
+        "--no-gradient",
+        action="store_true",
+        help="Desactivar el degradado de horizonte ciclorama (#FFFFFF a #F4F4F4).",
+    )
+    parser.add_argument(
         "--auto-crop",
         action="store_true",
         help="Ajustar automáticamente el encuadre al sujeto sin márgenes excesivos.",
@@ -176,6 +186,8 @@ def main():
                     text_prompt=args.prompt,
                     bg_color=args.bg,
                     apply_shadows=not args.no_shadows,
+                    enhance_colors=not args.no_enhance,
+                    use_ground_gradient=not args.no_gradient,
                     shadow_intensity=args.shadow_intensity,
                     shadow_blur=args.shadow_blur,
                     auto_crop=args.auto_crop,

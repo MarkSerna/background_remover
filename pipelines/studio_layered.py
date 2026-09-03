@@ -1,11 +1,11 @@
 """
 Pipeline de Estudio Estratificado Multicapa (Studio Layered Pipeline).
-Flujo avanzado en 5 etapas:
+Cadena de procesamiento fotográfico profesional en 5 fases:
   1. Detección Zero-Shot guiada por texto libre (Grounding DINO / OWL-ViT)
   2. Segmentación de bordes finos y aislamiento de instancias (BiRefNet + SAM 2)
   3. Estimación de profundidad monocular y ordenamiento Z-index (Depth Anything V2)
-  4. Síntesis de sombras de contacto realistas (Ambient Occlusion en base de contacto)
-  5. Composición estratificada Back-to-Front sobre lienzo fotográfico de estudio
+  4. Mejora fotográfica y graduación de estudio (Balance de Blancos 5500K + Exposición High-Key + Despill)
+  5. Síntesis de sombras de contacto (Footprint AO) y composición estratificada sobre degradado de horizonte
 """
 
 import logging
@@ -18,14 +18,15 @@ from core.detector import ZeroShotDetector
 from core.depth import DepthEstimator
 from core.shadow import ContactShadowGenerator
 from core.compositor import LayeredCompositor
+from core.enhancer import StudioEnhancer
 
 logger = logging.getLogger(__name__)
 
 
 class StudioLayeredPipeline:
     """
-    Pipeline avanzado de estudio fotográfico con aislamiento de instancias,
-    inferencia de profundidad y sombras de contacto volumétricas.
+    Pipeline fotográfico de estudio profesional con corrección de iluminación,
+    despill de bordes, sombras de oclusión ambiental y fondo con perspectiva 3D.
     """
 
     def __init__(
@@ -35,6 +36,7 @@ class StudioLayeredPipeline:
         depth_estimator: Optional[DepthEstimator] = None,
         shadow_generator: Optional[ContactShadowGenerator] = None,
         compositor: Optional[LayeredCompositor] = None,
+        enhancer: Optional[StudioEnhancer] = None,
         device: str = "auto",
     ):
         self.device = device
@@ -43,6 +45,7 @@ class StudioLayeredPipeline:
         self.depth_estimator = depth_estimator or DepthEstimator(device=device)
         self.shadow_generator = shadow_generator or ContactShadowGenerator()
         self.compositor = compositor or LayeredCompositor(shadow_generator=self.shadow_generator)
+        self.enhancer = enhancer or StudioEnhancer()
 
     def process(
         self,
@@ -50,24 +53,31 @@ class StudioLayeredPipeline:
         text_prompt: Optional[str] = None,
         bg_color: str = "white",
         apply_shadows: bool = True,
+        enhance_colors: bool = True,
+        use_ground_gradient: bool = True,
         shadow_intensity: float = 0.65,
         shadow_blur: float = 12.0,
         auto_crop: bool = False,
     ) -> Tuple[Image.Image, Dict[str, Any]]:
         """
-        Ejecuta el pipeline multicapa de estudio completo.
+        Ejecuta la cadena completa de producción de estudio fotográfico.
+
+        Cadena de ejecución:
+          Segment -> Depth Sort -> Enhance/Color Balance -> Generate Footprint Shadows -> Final Composite
 
         Args:
             image_input: Ruta o imagen PIL de entrada.
-            text_prompt: Prompt de texto opcional para guiar la detección de instancias (ej: 'product, shoes').
-            bg_color: Fondo ('white', 'transparent', o código Hex '#FFFFFF').
-            apply_shadows: Si se deben proyectar sombras de contacto.
-            shadow_intensity: Intensidad de la sombra (0.0 a 1.0).
-            shadow_blur: Radio de desenfoque de la sombra.
-            auto_crop: Si es True, recorta el encuadre final al contenido útil.
+            text_prompt: Prompt de texto para filtrar/detectar instancias específicas.
+            bg_color: Fondo ('white', 'transparent', o código Hex).
+            apply_shadows: Si se deben generar sombras de contacto de oclusión ambiental.
+            enhance_colors: Si se debe aplicar corrección de balance de blancos 5500K y despill de bordes.
+            use_ground_gradient: Si se debe aplicar el suave degradado de horizonte de ciclorama (#FFFFFF -> #F4F4F4).
+            shadow_intensity: Factor de opacidad de la sombra (0.0 a 1.0).
+            shadow_blur: Radio de difusión de la sombra.
+            auto_crop: Si es True, recorta márgenes vacíos.
 
         Returns:
-            Tuple con (Imagen final PIL compuesta, Diccionario con metadatos de las capas e inferencia)
+            Tuple con (Imagen final PIL tratada, Diccionario de metadatos de producción)
         """
         if isinstance(image_input, (str, Path)):
             img = Image.open(image_input)
@@ -78,50 +88,62 @@ class StudioLayeredPipeline:
             img = img.convert("RGB")
 
         w, h = img.size
-        logger.info(f"Iniciando Studio Pipeline para imagen de {w}x{h}...")
+        logger.info(f"Iniciando Studio Pipeline fotográfico ({w}x{h})...")
 
         # -------------------------------------------------------------
-        # Etapa 1: Detección Zero-Shot guiada por texto
+        # 1. Detección Zero-Shot opcional por texto
         # -------------------------------------------------------------
         detections = []
         if text_prompt and text_prompt.strip():
-            logger.info(f"Etapa 1: Detectando instancias con prompt '{text_prompt}'...")
+            logger.info(f"1/5: Localizando instancias con prompt: '{text_prompt}'...")
             detections = self.detector.detect(img, text_prompt=text_prompt)
 
         # -------------------------------------------------------------
-        # Etapa 2: Segmentación y Aislamiento de Instancias (BiRefNet + SAM 2)
+        # 2. Segmentación de bordes finos e instancias (BiRefNet)
         # -------------------------------------------------------------
-        logger.info("Etapa 2: Aislamiento de instancias con BiRefNet...")
+        logger.info("2/5: Segmentación y aislamiento de instancias con BiRefNet...")
         instances = self.segmenter.extract_instances(img, detections=detections)
-        logger.info(f"Se aislaron {len(instances)} capa(s) de instancias.")
+        logger.info(f"     Se extrajeron {len(instances)} capa(s).")
 
         # -------------------------------------------------------------
-        # Etapa 3: Estimación de Profundidad Monocular (Depth Anything V2)
+        # 3. Estimación de profundidad monocular y ordenamiento Z (Depth Anything V2)
         # -------------------------------------------------------------
-        logger.info("Etapa 3: Estimando mapa de profundidad 3D...")
+        logger.info("3/5: Estimando mapa 3D y ordenando capas por profundidad Z...")
         depth_map = self.depth_estimator.estimate_depth(img)
 
-        # Asignar Z-depth a cada instancia
         for inst in instances:
             z_val = self.depth_estimator.calculate_instance_depth(depth_map, inst["mask"])
             inst["depth"] = z_val
 
+        # Ordenar de menor a mayor profundidad (del fondo hacia el frente)
+        instances.sort(key=lambda x: x["depth"])
+
         # -------------------------------------------------------------
-        # Etapa 4 y 5: Sombras de Contacto y Composición Estratificada
+        # 4. Mejora fotográfica, Balance de Blancos y Despill de bordes
         # -------------------------------------------------------------
-        logger.info("Etapas 4 y 5: Generando sombras y componiendo en orden Z...")
+        if enhance_colors:
+            logger.info("4/5: Aplicando graduación de estudio (White Balance 5500K + Exposición + Despill)...")
+            for inst in instances:
+                inst["rgba"] = self.enhancer.enhance(inst["rgba"], inst["mask"])
+        else:
+            logger.info("4/5: Graduación fotográfica omitida por configuración.")
+
+        # -------------------------------------------------------------
+        # 5. Huellas de sombra (Footprint AO) y Composición de Estudio
+        # -------------------------------------------------------------
+        logger.info("5/5: Mapeando sombras de contacto en suelo y componiendo sobre ciclorama...")
         final_img, layer_metadata = self.compositor.composite(
             layers=instances,
             canvas_size=(w, h),
             bg_color=bg_color,
             apply_shadows=apply_shadows,
+            use_ground_gradient=use_ground_gradient,
             shadow_intensity=shadow_intensity,
             shadow_blur=shadow_blur,
         )
 
         # Auto-crop opcional
         if auto_crop:
-            # Combinar todas las máscaras para calcular el bounding box global
             combined_mask = Image.new("L", (w, h), 0)
             for inst in instances:
                 combined_mask.paste(inst["mask"], (0, 0), inst["mask"])
@@ -142,6 +164,8 @@ class StudioLayeredPipeline:
             "dimensions": final_img.size,
             "bg_color": bg_color,
             "apply_shadows": apply_shadows,
+            "enhance_colors": enhance_colors,
+            "use_ground_gradient": use_ground_gradient,
             "shadow_intensity": shadow_intensity,
             "shadow_blur": shadow_blur,
             "prompt": text_prompt,
@@ -149,5 +173,5 @@ class StudioLayeredPipeline:
             "layers": layer_metadata,
         }
 
-        logger.info("Studio Layered Pipeline completado exitosamente.")
+        logger.info("Studio Layered Pipeline completado con éxito.")
         return final_img, metadata
