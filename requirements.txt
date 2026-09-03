@@ -1,10 +1,18 @@
+# Core AI & Image Processing
+torch>=2.0.0
+transformers>=4.35.0
 rembg>=2.0.50
+onnxruntime>=1.15.0
 pillow>=10.0.0
 pillow-heif>=0.13.0
-onnxruntime>=1.15.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# GUI & Desktop Utilities
+flet>=0.86.0
+pywin32>=306
+
+# System & Processing
 python-dotenv>=1.0.0
 watchdog>=3.0.0
 tqdm>=4.65.0
-
-flet>=0.86.0
-pywin32>=306
