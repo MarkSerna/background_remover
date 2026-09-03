@@ -123,14 +123,14 @@ class BackgroundRemoverGUI:
         page.title = "Background Remover Pro — Fondo Blanco Inteligente"
         page.theme_mode = ft.ThemeMode.DARK
         page.bgcolor = BG_APP
-        page.padding = 10
+        page.padding = ft.Padding.only(left=12, top=10, right=12, bottom=16)
         page.scroll = None  # Cero scroll garantizado
 
         # Dimensiones optimizadas para pantallas estándar (768p / 800p / 900p / 1080p)
         page.window.width = 960
-        page.window.height = 870
+        page.window.height = 890
         page.window.min_width = 900
-        page.window.min_height = 780
+        page.window.min_height = 800
         page.window.resizable = True
         page.run_task(page.window.center)
 
@@ -689,12 +689,15 @@ class BackgroundRemoverGUI:
             on_click=self._start_processing_thread,
         )
 
-        actions_row = ft.Row(
-            controls=[
-                self.btn_open_folder,
-                self.btn_process,
-            ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        actions_row = ft.Container(
+            content=ft.Row(
+                controls=[
+                    self.btn_open_folder,
+                    self.btn_process,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=ft.Padding.only(bottom=8),
         )
 
         # Inserción en la página con espaciado ultra-compacto
