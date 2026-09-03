@@ -133,7 +133,7 @@ class BackgroundRemoverGUI:
         page.window.min_width = 860
         page.window.min_height = 760
         page.window.resizable = True
-        page.window.center()
+        page.run_task(page.window.center)
 
         if ICON_ICO.exists():
             page.window.icon = str(ICON_ICO.resolve())
@@ -171,8 +171,8 @@ class BackgroundRemoverGUI:
             ),
             bgcolor=SURFACE,
             border_radius=8,
-            padding=ft.padding.symmetric(horizontal=16, vertical=10),
-            border=ft.border.all(1, BORDER),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+            border=ft.Border.all(1, BORDER),
         )
 
         # 2. Tarjeta de Entrada y Rutas
@@ -256,7 +256,7 @@ class BackgroundRemoverGUI:
             bgcolor=SURFACE,
             border_radius=8,
             padding=12,
-            border=ft.border.all(1, BORDER),
+            border=ft.Border.all(1, BORDER),
         )
 
         # 3. Tarjeta de Ajustes y Configuración
@@ -265,7 +265,7 @@ class BackgroundRemoverGUI:
             height=18,
             bgcolor=self.bg_color_hex,
             border_radius=4,
-            border=ft.border.all(1, "#FFFFFF" if self.bg_color == "white" else BORDER),
+            border=ft.Border.all(1, "#FFFFFF" if self.bg_color == "white" else BORDER),
         )
 
         self.radio_format = ft.RadioGroup(
@@ -373,7 +373,7 @@ class BackgroundRemoverGUI:
                         ),
                         bgcolor="#3D1A05",
                         border_radius=6,
-                        padding=ft.padding.symmetric(horizontal=10, vertical=4),
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                     ),
                 ],
                 spacing=8,
@@ -381,7 +381,7 @@ class BackgroundRemoverGUI:
             bgcolor=SURFACE,
             border_radius=8,
             padding=12,
-            border=ft.border.all(1, BORDER),
+            border=ft.Border.all(1, BORDER),
         )
 
         # 4. Tarjeta de Previsualización Lado a Lado (Antes vs Después)
@@ -447,10 +447,10 @@ class BackgroundRemoverGUI:
                                                     self.img_orig_placeholder,
                                                     self.img_orig_view,
                                                 ],
-                                                alignment=ft.alignment.center,
+                                                alignment=ft.Alignment.CENTER,
                                             ),
                                             expand=True,
-                                            alignment=ft.alignment.center,
+                                            alignment=ft.Alignment.CENTER,
                                         ),
                                     ],
                                     spacing=4,
@@ -461,7 +461,7 @@ class BackgroundRemoverGUI:
                                 padding=8,
                                 expand=True,
                                 height=240,
-                                border=ft.border.all(1, BORDER),
+                                border=ft.Border.all(1, BORDER),
                             ),
                             # Contenedor Imagen Resultado
                             ft.Container(
@@ -474,10 +474,10 @@ class BackgroundRemoverGUI:
                                                     self.img_res_placeholder,
                                                     self.img_res_view,
                                                 ],
-                                                alignment=ft.alignment.center,
+                                                alignment=ft.Alignment.CENTER,
                                             ),
                                             expand=True,
-                                            alignment=ft.alignment.center,
+                                            alignment=ft.Alignment.CENTER,
                                         ),
                                     ],
                                     spacing=4,
@@ -488,7 +488,7 @@ class BackgroundRemoverGUI:
                                 padding=8,
                                 expand=True,
                                 height=240,
-                                border=ft.border.all(1, BORDER),
+                                border=ft.Border.all(1, BORDER),
                             ),
                         ],
                         spacing=12,
@@ -499,7 +499,7 @@ class BackgroundRemoverGUI:
             bgcolor=SURFACE,
             border_radius=8,
             padding=12,
-            border=ft.border.all(1, BORDER),
+            border=ft.Border.all(1, BORDER),
         )
 
         # 5. Barra de Estado del Modelo y Log de Ejecución
@@ -536,8 +536,8 @@ class BackgroundRemoverGUI:
                         content=self.lbl_model_status,
                         bgcolor=SURFACE_INNER,
                         border_radius=6,
-                        padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                        border=ft.border.all(1, BORDER),
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+                        border=ft.Border.all(1, BORDER),
                     ),
                     ft.Row(
                         controls=[
@@ -552,7 +552,7 @@ class BackgroundRemoverGUI:
             bgcolor=SURFACE,
             border_radius=8,
             padding=12,
-            border=ft.border.all(1, BORDER),
+            border=ft.Border.all(1, BORDER),
         )
 
         # 6. Botones de Acción Inferiores
@@ -571,7 +571,7 @@ class BackgroundRemoverGUI:
             color=TEXT_PRIMARY,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.padding.symmetric(horizontal=24),
+                padding=ft.Padding.symmetric(horizontal=24),
             ),
             on_click=self._start_processing_thread,
         )
@@ -770,9 +770,9 @@ class BackgroundRemoverGUI:
             ft.Container(
                 content=ft.Text(label, size=10, color=TEXT_PRIMARY),
                 bgcolor=SURFACE_INNER,
-                border=ft.border.all(1, hex_code),
+                border=ft.Border.all(1, hex_code),
                 border_radius=4,
-                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
                 on_click=lambda _, h=hex_code: pick_preset(h),
             )
             for hex_code, label in color_presets
