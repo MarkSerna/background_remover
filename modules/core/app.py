@@ -114,7 +114,7 @@ class BackgroundRemoverApp:
         if (no_cli_args or getattr(args, "gui", False)) and not getattr(args, "cli", False):
             from modules.ui.app_gui import launch_gui
             if splash is not None:
-                splash.close()   # cerrar justo antes de que aparezca la ventana CTk
+                splash.close()   # cerrar splash antes de abrir la interfaz gráfica Flet
             launch_gui()
             return 0
 
@@ -235,7 +235,7 @@ def main(splash=None) -> int:
     if (no_cli_args or getattr(args, "gui", False)) and not getattr(args, "cli", False):
         from modules.ui.app_gui import launch_gui
         if splash is not None:
-            splash.close()   # cerrar justo antes de mostrar la ventana CTk
+            splash.close()   # cerrar splash antes de mostrar la interfaz gráfica Flet
         launch_gui()
         return 0
 

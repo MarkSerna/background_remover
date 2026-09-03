@@ -6,6 +6,5 @@ python-dotenv>=1.0.0
 watchdog>=3.0.0
 tqdm>=4.65.0
 
-customtkinter>=5.2.0
-tkinterdnd2>=0.6.2
+flet>=0.86.0
 pywin32>=306

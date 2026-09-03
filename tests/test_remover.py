@@ -97,7 +97,7 @@ class TestBackgroundRemover(unittest.TestCase):
 
     def test_gui_initialization(self):
         from modules.ui.app_gui import BackgroundRemoverGUI
-        # BackgroundRemoverGUI hereda de ctk.CTk; se instancia sin argumentos
+        # BackgroundRemoverGUI se inicializa de forma headless para pruebas sin ventana activa
         app = BackgroundRemoverGUI()
         self.assertIsNotNone(app)
         self.assertEqual(app.mode_var.get(), "file")

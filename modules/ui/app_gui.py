@@ -1,43 +1,34 @@
 """
-Interfaz Grafica avanzada con CustomTkinter para Background Remover.
+Interfaz Gráfica moderna y de alto rendimiento construida con Flet para Background Remover.
 Incluye:
-  - Drag & Drop (arrastrar y soltar imagenes/carpetas)
-  - Vista previa en vivo Antes vs Despues (Side-by-side thumbnails)
-  - Copiar imagen procesada al portapapeles de Windows (1 clic)
-  - Icono corporativo personalizado
+  - Procesamiento individual y por lotes con selección de modelos de IA
+  - Selección de archivos y carpetas mediante FilePicker nativo
+  - Vista previa en vivo Antes vs. Después (Side-by-side)
+  - Copiado de imagen procesada al portapapeles de Windows (1 clic, formato DIB)
+  - Paleta interactiva para selección de color de fondo personalizado
   - Persistencia de preferencias en AppData
-  - Diseño moderno sin scroll
+  - Consola de logs y barra de progreso en tiempo real
+  - Diseño responsivo, elegante y moderno construido nativamente con Flet
 """
 
 import os
 import sys
 import io
+import time
+import base64
 import threading
 import logging
 from pathlib import Path
 from typing import Optional
 
 from PIL import Image, ImageOps
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
-
+import flet as ft
 
 try:
     import win32clipboard
     HAS_CLIPBOARD = True
 except Exception:
     HAS_CLIPBOARD = False
-
-try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD
-    class CTkWithDnD(ctk.CTk, TkinterDnD.DnDWrapper):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self.TkdndVersion = TkinterDnD._require(self)
-    HAS_DND = True
-except Exception:
-    HAS_DND = False
-    CTkWithDnD = ctk.CTk
 
 from modules.models.config import config
 from modules.models.settings_manager import settings_manager
@@ -47,380 +38,789 @@ from modules.utils.helpers import parse_color_string
 
 logger = logging.getLogger(__name__)
 
-# Apariencia global
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
-
+# Paleta de colores visual
+BG_DARK = "#0F172A"
+SURFACE = "#1E293B"
+SURFACE_INNER = "#0B132B"
+BORDER = "#334155"
 ACCENT = "#3B82F6"
 ACCENT_HOVER = "#2563EB"
 SUCCESS = "#22C55E"
 WARNING = "#F59E0B"
 DANGER = "#EF4444"
-SURFACE = "#1E293B"
-CARD = "#0F172A"
+TEXT_PRIMARY = "#F8FAFC"
 TEXT_MUTED = "#94A3B8"
 
 ICON_ICO = Path("assets/app_icon.ico")
 ICON_PNG = Path("assets/app_icon.png")
 
 
-class BackgroundRemoverGUI(CTkWithDnD):
-    """Ventana principal avanzada con Drag & Drop, Previsualización y Copiado al Portapapeles."""
+class _VarAdapter:
+    """Adaptador de compatibilidad para acceso reactivo simple tipo .get() / .set()."""
+    def __init__(self, value):
+        self._value = value
 
-    def __init__(self):
-        super().__init__()
-        self.title("Background Remover — Fondo Blanco Inteligente")
-        self.geometry("860x760")
-        self.minsize(820, 720)
-        self.configure(fg_color=CARD)
+    def get(self):
+        return self._value
 
-        # Cargar icono corporativo
-        self._setup_icon()
+    def set(self, val):
+        self._value = val
 
-        # Cargar preferencias guardadas desde AppData
+
+class BackgroundRemoverGUI:
+    """Controlador y vista principal de la aplicación Background Remover con Flet."""
+
+    def __init__(self, page: Optional[ft.Page] = None):
+        # Cargar preferencias guardadas
         saved_output = settings_manager.get("output_dir", "")
         default_out = saved_output if saved_output and Path(saved_output).exists() else str(config.output_dir.resolve())
 
-        self.mode_var = ctk.StringVar(value="file")
-        self.input_path_var = ctk.StringVar(value="")
-        self.output_dir_var = ctk.StringVar(value=default_out)
-        self.bg_color_var = ctk.StringVar(value=settings_manager.get("bg_color", "white"))
+        self.mode = "file"
+        self.input_path = ""
+        self.output_dir = default_out
+        self.bg_color = settings_manager.get("bg_color", "white")
         self.bg_color_hex = settings_manager.get("bg_color_hex", "#FFFFFF")
-        self.format_var = ctk.StringVar(value=settings_manager.get("output_format", "JPEG"))
-        self.auto_crop_var = ctk.BooleanVar(value=settings_manager.get("auto_crop", False))
-        self.alpha_matting_var = ctk.BooleanVar(value=settings_manager.get("alpha_matting", False))
-        self.batch_limit_var = ctk.IntVar(value=settings_manager.get("batch_limit", config.processing.batch_limit))
-        self.model_mode_var = ctk.StringVar(value=settings_manager.get("model_name", "auto"))
+        self.output_format = settings_manager.get("output_format", "JPEG")
+        self.auto_crop = settings_manager.get("auto_crop", False)
+        self.alpha_matting = settings_manager.get("alpha_matting", False)
+        self.batch_limit = int(settings_manager.get("batch_limit", config.processing.batch_limit) or 20)
+        self.model_name = settings_manager.get("model_name", "auto")
         self.is_processing = False
 
-        # Imagenes cargadas para previsualizacion
+        # Adaptadores para compatibilidad
+        self.mode_var = _VarAdapter(self.mode)
+        self.input_path_var = _VarAdapter(self.input_path)
+        self.output_dir_var = _VarAdapter(self.output_dir)
+        self.bg_color_var = _VarAdapter(self.bg_color)
+        self.format_var = _VarAdapter(self.output_format)
+        self.auto_crop_var = _VarAdapter(self.auto_crop)
+        self.alpha_matting_var = _VarAdapter(self.alpha_matting)
+        self.batch_limit_var = _VarAdapter(self.batch_limit)
+        self.model_mode_var = _VarAdapter(self.model_name)
+
+        # Estado de imágenes cargadas en memoria
         self.current_orig_pil: Optional[Image.Image] = None
         self.current_res_pil: Optional[Image.Image] = None
 
-        # Servicios
+        # Servicios de procesamiento
         self.file_manager = FileManager(config)
         self.batch_service = BatchProcessingService(config, file_manager=self.file_manager)
 
+        self.page: Optional[ft.Page] = page
+        if self.page is not None:
+            self._setup_page()
+
+    def destroy(self):
+        """Método de compatibilidad para finalización."""
+        if self.page:
+            try:
+                self.page.window.close()
+            except Exception:
+                pass
+
+    def _setup_page(self):
+        """Configuración de ventana y tema de Flet."""
+        page = self.page
+        page.title = "Background Remover — Fondo Blanco Inteligente"
+        page.theme_mode = ft.ThemeMode.DARK
+        page.bgcolor = BG_DARK
+        page.padding = 14
+        page.scroll = ft.ScrollMode.AUTO
+
+        # Configuración de ventana de escritorio
+        page.window.width = 920
+        page.window.height = 840
+        page.window.min_width = 860
+        page.window.min_height = 760
+        page.window.resizable = True
+        page.window.center()
+
+        if ICON_ICO.exists():
+            page.window.icon = str(ICON_ICO.resolve())
+
         self._build_ui()
 
-        # Configurar Drag & Drop
-        if HAS_DND:
-            self._setup_dnd()
-
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
-
-    def _setup_icon(self):
-        """Establece el icono de la ventana."""
-        try:
-            if ICON_ICO.exists():
-                self.iconbitmap(str(ICON_ICO.resolve()))
-        except Exception:
-            pass
-
-    def _setup_dnd(self):
-        """Habilita la funcion de arrastrar y soltar archivos/carpetas sobre la ventana."""
-        try:
-            self.drop_target_register(DND_FILES)
-            self.dnd_bind("<<Drop>>", self._on_drop_files)
-        except Exception as e:
-            logger.debug(f"No se pudo registrar Drag & Drop: {e}")
-
-    def _on_drop_files(self, event):
-        """Responde al soltar archivos o carpetas en la ventana."""
-        raw_data = event.data.strip()
-        # En Windows tkinterdnd envuelve rutas con espacios entre llaves {C:/Ruta Con Espacio}
-        if raw_data.startswith("{") and raw_data.endswith("}"):
-            path_str = raw_data[1:-1]
-        else:
-            path_str = raw_data.split()[0] if raw_data else ""
-        
-        p = Path(path_str)
-        if p.exists():
-            if p.is_file():
-                self.mode_var.set("file")
-                self._on_mode_change()
-                self.input_path_var.set(str(p.resolve()))
-                self._load_original_preview(p)
-                self._log(f"📥 Archivo arrastrado: {p.name}")
-            elif p.is_dir():
-                self.mode_var.set("folder")
-                self._on_mode_change()
-                self.input_path_var.set(str(p.resolve()))
-                self._log(f"📁 Carpeta arrastrada: {p.name}")
-
     def _build_ui(self):
-        main_container = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0)
-        main_container.pack(fill="both", expand=True, padx=12, pady=8)
+        page = self.page
 
-        # 1. Header compacto
-        header = ctk.CTkFrame(main_container, fg_color=SURFACE, corner_radius=8, height=42)
-        header.pack(fill="x", pady=(0, 4))
-        header.pack_propagate(False)
+        # FilePickers
+        self.file_picker_input = ft.FilePicker()
+        self.file_picker_output = ft.FilePicker()
+        page.overlay.extend([self.file_picker_input, self.file_picker_output])
 
-        h_inner = ctk.CTkFrame(header, fg_color="transparent")
-        h_inner.pack(fill="both", expand=True, padx=12, pady=4)
-
-        ctk.CTkLabel(
-            h_inner,
-            text="✨ Background Remover",
-            font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
-            text_color="white",
-        ).pack(side="left")
-
-        ctk.CTkLabel(
-            h_inner,
-            text="Remoción de fondo con IA | Soporta Drag & Drop, Previsualización y Copiado al Portapapeles",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
-            text_color=TEXT_MUTED,
-        ).pack(side="left", padx=(12, 0))
-
-        ctk.CTkLabel(
-            h_inner,
-            text="Desarrollado por Altikore",
-            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
-            text_color=ACCENT,
-        ).pack(side="right")
-
-
-        # 2. Sección Superior: Rutas y Ajustes (fila única, ancho completo)
-        cfg_card = ctk.CTkFrame(main_container, fg_color=SURFACE, corner_radius=8)
-        cfg_card.pack(fill="x", pady=2)
-
-        # Fila Modo y Rutas
-        mode_row = ctk.CTkFrame(cfg_card, fg_color="transparent")
-        mode_row.pack(fill="x", padx=10, pady=(6, 2))
-
-        ctk.CTkLabel(mode_row, text="1. Entrada:", font=ctk.CTkFont(size=11, weight="bold"), text_color="white").pack(side="left", padx=(0, 10))
-        ctk.CTkRadioButton(mode_row, text="Archivo", variable=self.mode_var, value="file", command=self._on_mode_change,
-                           font=ctk.CTkFont(size=11), fg_color=ACCENT, hover_color=ACCENT_HOVER).pack(side="left", padx=(0, 10))
-        ctk.CTkRadioButton(mode_row, text="Carpeta (Lote)", variable=self.mode_var, value="folder", command=self._on_mode_change,
-                           font=ctk.CTkFont(size=11), fg_color=ACCENT, hover_color=ACCENT_HOVER).pack(side="left")
-
-        in_row = ctk.CTkFrame(cfg_card, fg_color="transparent")
-        in_row.pack(fill="x", padx=10, pady=2)
-        in_row.grid_columnconfigure(1, weight=1)
-        self.input_label = ctk.CTkLabel(in_row, text="Origen:", width=55, anchor="w", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED)
-        self.input_label.grid(row=0, column=0, sticky="w")
-        ctk.CTkEntry(in_row, textvariable=self.input_path_var, placeholder_text="Arrastre imagen/carpeta o examine...",
-                     font=ctk.CTkFont(size=11), height=26, fg_color="#0B132B", border_color="#334155").grid(row=0, column=1, sticky="ew", padx=4)
-        self.btn_browse_input = ctk.CTkButton(in_row, text="Examinar", width=75, height=26, font=ctk.CTkFont(size=11),
-                                              fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._browse_input)
-        self.btn_browse_input.grid(row=0, column=2)
-
-        out_row = ctk.CTkFrame(cfg_card, fg_color="transparent")
-        out_row.pack(fill="x", padx=10, pady=(2, 4))
-        out_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(out_row, text="Destino:", width=55, anchor="w", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED).grid(row=0, column=0, sticky="w")
-        ctk.CTkEntry(out_row, textvariable=self.output_dir_var, placeholder_text="Carpeta de salida...",
-                     font=ctk.CTkFont(size=11), height=26, fg_color="#0B132B", border_color="#334155").grid(row=0, column=1, sticky="ew", padx=4)
-        self.btn_browse_output = ctk.CTkButton(out_row, text="Examinar", width=75, height=26, font=ctk.CTkFont(size=11),
-                                               fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._browse_output)
-        self.btn_browse_output.grid(row=0, column=2)
-
-        # Separador interno
-        ctk.CTkFrame(cfg_card, fg_color="#334155", height=1).pack(fill="x", padx=10, pady=2)
-
-        # Fila Ajustes 1: Fondo y Formato
-        cfg_row1 = ctk.CTkFrame(cfg_card, fg_color="transparent")
-        cfg_row1.pack(fill="x", padx=10, pady=(4, 2))
-        ctk.CTkLabel(cfg_row1, text="2. Ajustes:", font=ctk.CTkFont(size=11, weight="bold"), text_color="white").pack(side="left", padx=(0, 8))
-        ctk.CTkLabel(cfg_row1, text="Fondo:", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED).pack(side="left", padx=(0, 4))
-        self.color_swatch = ctk.CTkLabel(cfg_row1, text="", width=16, height=16, fg_color=self.bg_color_hex, corner_radius=3)
-        self.color_swatch.pack(side="left", padx=(0, 4))
-        ctk.CTkButton(cfg_row1, text="Color", width=50, height=22, font=ctk.CTkFont(size=10),
-                      fg_color="#334155", hover_color="#475569", command=self._choose_color).pack(side="left", padx=1)
-        ctk.CTkButton(cfg_row1, text="Blanco", width=50, height=22, font=ctk.CTkFont(size=10),
-                      fg_color="#334155", hover_color="#475569", command=lambda: self._set_preset_color("white", "#FFFFFF")).pack(side="left", padx=1)
-        ctk.CTkButton(cfg_row1, text="PNG Transp.", width=75, height=22, font=ctk.CTkFont(size=10),
-                      fg_color="#334155", hover_color="#475569", command=lambda: self._set_preset_color("transparent", "#1E293B")).pack(side="left", padx=(1, 8))
-
-        ctk.CTkLabel(cfg_row1, text="Formato:", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED).pack(side="left", padx=(0, 4))
-        for fmt in ["JPEG", "PNG", "WEBP"]:
-            ctk.CTkRadioButton(cfg_row1, text=fmt, value=fmt, variable=self.format_var,
-                               fg_color=ACCENT, hover_color=ACCENT_HOVER, font=ctk.CTkFont(size=10)).pack(side="left", padx=2)
-
-        # Fila Ajustes 2: Modelo + Checkboxes
-        cfg_row2 = ctk.CTkFrame(cfg_card, fg_color="transparent")
-        cfg_row2.pack(fill="x", padx=10, pady=(2, 4))
-        ctk.CTkLabel(cfg_row2, text="Modelo IA:", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED).pack(side="left", padx=(0, 4))
-        models = ["auto", "bria-rmbg", "birefnet-general", "u2net_human_seg", "u2net", "isnet-general-use", "silueta"]
-        self.model_menu = ctk.CTkOptionMenu(
-            cfg_row2, variable=self.model_mode_var, values=models,
-            font=ctk.CTkFont(size=10), fg_color="#0B132B", button_color=ACCENT,
-            button_hover_color=ACCENT_HOVER, dropdown_fg_color=SURFACE, width=130, height=24,
+        # 1. Header estilizado
+        header = ft.Container(
+            content=ft.Row(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Text("✨", size=22),
+                            ft.Column(
+                                controls=[
+                                    ft.Text("Background Remover", size=16, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                                    ft.Text("Remoción de fondo con IA | Fondo Blanco Inteligente", size=11, color=TEXT_MUTED),
+                                ],
+                                spacing=0,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Text("Desarrollado por Altikore", size=11, weight=ft.FontWeight.BOLD, color=ACCENT),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            bgcolor=SURFACE,
+            border_radius=8,
+            padding=ft.padding.symmetric(horizontal=16, vertical=10),
+            border=ft.border.all(1, BORDER),
         )
-        self.model_menu.pack(side="left", padx=(0, 8))
 
-        ctk.CTkLabel(cfg_row2, text="Límite:", font=ctk.CTkFont(size=11), text_color=TEXT_MUTED).pack(side="left", padx=(0, 2))
-        self.spin_limit = ctk.CTkEntry(cfg_row2, textvariable=self.batch_limit_var, width=48, height=24, font=ctk.CTkFont(size=10), justify="center")
-        self.spin_limit.pack(side="left", padx=(0, 8))
-
-        ctk.CTkCheckBox(cfg_row2, text="Auto-crop", variable=self.auto_crop_var,
-                        fg_color=ACCENT, hover_color=ACCENT_HOVER, font=ctk.CTkFont(size=10)).pack(side="left", padx=(0, 6))
-        ctk.CTkCheckBox(cfg_row2, text="Alpha Matting", variable=self.alpha_matting_var,
-                        fg_color=ACCENT, hover_color=ACCENT_HOVER, font=ctk.CTkFont(size=10)).pack(side="left")
-
-        # Fila Advertencia
-        warn_row = ctk.CTkFrame(cfg_card, fg_color="#451A03", corner_radius=4)
-        warn_row.pack(fill="x", padx=10, pady=(2, 6))
-        ctk.CTkLabel(
-            warn_row,
-            text="  ⚠️ Estándar recomendado: 20 imágenes por intento. Puedes ampliar el límite según la capacidad de tu equipo.",
-            font=ctk.CTkFont(size=10, weight="bold"), text_color=WARNING, anchor="w",
-        ).pack(fill="x", padx=4, pady=2)
-
-        # 3. Previsualización en Vivo (altura FIJA — no varía al cargar imágenes)
-        prev_card = ctk.CTkFrame(main_container, fg_color=SURFACE, corner_radius=8, height=300)
-        prev_card.pack(fill="x", pady=2)
-        prev_card.pack_propagate(False)  # <-- impide que las imágenes redimensionen el panel
-
-        prev_header_row = ctk.CTkFrame(prev_card, fg_color="transparent")
-        prev_header_row.pack(fill="x", padx=10, pady=(6, 4))
-        ctk.CTkLabel(
-            prev_header_row, text="3. 👁️ Previsualización en Vivo — Antes vs. Después",
-            font=ctk.CTkFont(size=11, weight="bold"), text_color="white",
-        ).pack(side="left")
-        self.btn_copy_clipboard = ctk.CTkButton(
-            prev_header_row, text="📋 Copiar al Portapapeles", height=24,
-            font=ctk.CTkFont(size=10, weight="bold"),
-            fg_color="#1E3A5F", hover_color=ACCENT,
-            command=self._copy_result_to_clipboard, state="disabled"
+        # 2. Tarjeta de Entrada y Rutas
+        self.radio_mode = ft.RadioGroup(
+            content=ft.Row(
+                controls=[
+                    ft.Radio(value="file", label="Archivo individual"),
+                    ft.Radio(value="folder", label="Carpeta (Lote)"),
+                ],
+                spacing=16,
+            ),
+            value=self.mode,
+            on_change=self._on_mode_change,
         )
-        self.btn_copy_clipboard.pack(side="right")
 
-        prev_box = ctk.CTkFrame(prev_card, fg_color="transparent")
-        prev_box.pack(fill="both", expand=True, padx=8, pady=(0, 6))
-        prev_box.grid_columnconfigure(0, weight=1)
-        prev_box.grid_columnconfigure(1, weight=1)
-        prev_box.grid_rowconfigure(0, weight=1)
-
-        # Marco Original (altura fija interna)
-        orig_frame = ctk.CTkFrame(prev_box, fg_color="#0B132B", corner_radius=8)
-        orig_frame.grid(row=0, column=0, sticky="nsew", padx=(2, 4), pady=2)
-        orig_frame.grid_propagate(False)  # fija el marco
-        ctk.CTkLabel(orig_frame, text="Original", font=ctk.CTkFont(size=11, weight="bold"), text_color=TEXT_MUTED).pack(pady=(6, 2))
-        self.lbl_preview_orig = ctk.CTkLabel(
-            orig_frame, text="Arrastre una imagen\no presione Examinar",
-            font=ctk.CTkFont(size=11), text_color="#475569", anchor="center"
+        self.txt_input_path = ft.TextField(
+            value=self.input_path,
+            placeholder_text="Seleccione o examine una imagen o carpeta...",
+            text_size=12,
+            dense=True,
+            expand=True,
+            bgcolor=SURFACE_INNER,
+            border_color=BORDER,
+            on_change=self._on_input_text_change,
         )
-        self.lbl_preview_orig.pack(expand=True)
 
-        # Marco Resultado (altura fija interna)
-        res_frame = ctk.CTkFrame(prev_box, fg_color="#0B132B", corner_radius=8)
-        res_frame.grid(row=0, column=1, sticky="nsew", padx=(4, 2), pady=2)
-        res_frame.grid_propagate(False)  # fija el marco
-        ctk.CTkLabel(res_frame, text="Fondo Blanco / Resultado", font=ctk.CTkFont(size=11, weight="bold"), text_color=TEXT_MUTED).pack(pady=(6, 2))
-        self.lbl_preview_res = ctk.CTkLabel(
-            res_frame, text="Procesando...",
-            font=ctk.CTkFont(size=11), text_color="#475569", anchor="center"
+        self.txt_output_path = ft.TextField(
+            value=self.output_dir,
+            placeholder_text="Carpeta de destino...",
+            text_size=12,
+            dense=True,
+            expand=True,
+            bgcolor=SURFACE_INNER,
+            border_color=BORDER,
+            on_change=self._on_output_text_change,
         )
-        self.lbl_preview_res.pack(expand=True)
 
-        # 4. Barra de Estado del Modelo IA (compacta, debajo del preview)
-        self.model_info_frame = ctk.CTkFrame(main_container, fg_color="#0C1A2E", corner_radius=6, height=26)
-        self.model_info_frame.pack(fill="x", pady=(2, 1))
-        self.model_info_frame.pack_propagate(False)
-        self.model_info_label = ctk.CTkLabel(
-            self.model_info_frame,
-            text="  ⚡ Selección automática activa: analiza cada imagen y aplica el modelo óptimo (SOTA RMBG).",
-            font=ctk.CTkFont(size=10), text_color=TEXT_MUTED, anchor="w",
+        input_card = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Text("1. Modo y Rutas:", size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                            self.radio_mode,
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.Text("Origen:", size=11, color=TEXT_MUTED, width=55),
+                            self.txt_input_path,
+                            ft.ElevatedButton(
+                                "Examinar",
+                                icon=ft.Icons.FOLDER_OPEN,
+                                bgcolor=ACCENT,
+                                color=TEXT_PRIMARY,
+                                height=36,
+                                on_click=self._browse_input,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.Text("Destino:", size=11, color=TEXT_MUTED, width=55),
+                            self.txt_output_path,
+                            ft.ElevatedButton(
+                                "Examinar",
+                                icon=ft.Icons.FOLDER,
+                                bgcolor=ACCENT,
+                                color=TEXT_PRIMARY,
+                                height=36,
+                                on_click=self._browse_output,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=8,
+            ),
+            bgcolor=SURFACE,
+            border_radius=8,
+            padding=12,
+            border=ft.border.all(1, BORDER),
         )
-        self.model_info_label.pack(fill="both", expand=True, padx=8)
 
-        # 5. Log de actividad compacto (franja fija debajo de la barra de estado)
-        log_card = ctk.CTkFrame(main_container, fg_color=SURFACE, corner_radius=8, height=90)
-        log_card.pack(fill="x", pady=(1, 2))
-        log_card.pack_propagate(False)
-
-        log_header = ctk.CTkFrame(log_card, fg_color="transparent")
-        log_header.pack(fill="x", padx=8, pady=(4, 0))
-        ctk.CTkLabel(
-            log_header, text="4. Registro de Estado:",
-            font=ctk.CTkFont(size=10, weight="bold"), text_color="white"
-        ).pack(side="left")
-
-        self.progress_bar = ctk.CTkProgressBar(
-            log_card, mode="determinate", height=6,
-            fg_color="#1E3A5F", progress_color=ACCENT, corner_radius=4
+        # 3. Tarjeta de Ajustes y Configuración
+        self.color_swatch = ft.Container(
+            width=18,
+            height=18,
+            bgcolor=self.bg_color_hex,
+            border_radius=4,
+            border=ft.border.all(1, "#FFFFFF" if self.bg_color == "white" else BORDER),
         )
-        self.progress_bar.set(0)
-        self.progress_bar.pack(fill="x", padx=8, pady=(2, 2))
 
-        self.log_box = ctk.CTkTextbox(
-            log_card, font=ctk.CTkFont(family="Consolas", size=10),
-            fg_color=CARD, text_color="#CBD5E1", corner_radius=4,
-            border_color="#1E3A5F", border_width=1, state="disabled"
+        self.radio_format = ft.RadioGroup(
+            content=ft.Row(
+                controls=[
+                    ft.Radio(value="JPEG", label="JPEG"),
+                    ft.Radio(value="PNG", label="PNG"),
+                    ft.Radio(value="WEBP", label="WEBP"),
+                ],
+                spacing=10,
+            ),
+            value=self.output_format,
+            on_change=self._on_format_change,
         )
-        self.log_box.pack(fill="both", expand=True, padx=8, pady=(0, 4))
 
-        # 6. Barra de Acciones Inferior
-        actions = ctk.CTkFrame(main_container, fg_color="transparent")
-        actions.pack(fill="x", pady=(2, 0))
-        actions.grid_columnconfigure(1, weight=1)
-
-        self.btn_open_folder = ctk.CTkButton(
-            actions, text="📁 Abrir Carpeta Destino", width=170, height=34,
-            font=ctk.CTkFont(size=11), fg_color="#334155", hover_color="#475569",
-            command=self._open_output_folder,
+        self.dropdown_model = ft.Dropdown(
+            options=[
+                ft.dropdown.Option("auto", "auto (SOTA Inteligente)"),
+                ft.dropdown.Option("bria-rmbg", "bria-rmbg (Recomendado)"),
+                ft.dropdown.Option("birefnet-general", "birefnet-general (Alta Fidelidad)"),
+                ft.dropdown.Option("u2net_human_seg", "u2net_human_seg (Personas)"),
+                ft.dropdown.Option("u2net", "u2net (General)"),
+                ft.dropdown.Option("isnet-general-use", "isnet-general-use"),
+                ft.dropdown.Option("silueta", "silueta (Ultra Rápido)"),
+            ],
+            value=self.model_name,
+            text_size=11,
+            dense=True,
+            width=210,
+            bgcolor=SURFACE_INNER,
+            border_color=BORDER,
+            on_change=self._on_model_change,
         )
-        self.btn_open_folder.grid(row=0, column=0, sticky="w")
 
-        self.btn_process = ctk.CTkButton(
-            actions, text="🚀 PROCESAR Y CAMBIAR A BLANCO", height=34,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            fg_color=ACCENT, hover_color=ACCENT_HOVER,
-            command=self._start_processing_thread,
+        self.txt_batch_limit = ft.TextField(
+            value=str(self.batch_limit),
+            width=55,
+            text_size=11,
+            text_align=ft.TextAlign.CENTER,
+            dense=True,
+            bgcolor=SURFACE_INNER,
+            border_color=BORDER,
+            on_change=self._on_batch_limit_change,
         )
-        self.btn_process.grid(row=0, column=1, sticky="e")
 
-        self._log("Listo. Arrastre una imagen/carpeta o presione Examinar y Procesar.")
+        self.chk_auto_crop = ft.Checkbox(
+            label="Auto-crop",
+            value=self.auto_crop,
+            on_change=lambda e: setattr(self, "auto_crop", e.control.value),
+        )
+
+        self.chk_alpha_matting = ft.Checkbox(
+            label="Alpha Matting",
+            value=self.alpha_matting,
+            on_change=lambda e: setattr(self, "alpha_matting", e.control.value),
+        )
+
+        settings_card = ft.Container(
+            content=ft.Column(
+                controls=[
+                    # Fila 1: Color y Formato
+                    ft.Row(
+                        controls=[
+                            ft.Text("2. Ajustes:", size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                            ft.Text("Fondo:", size=11, color=TEXT_MUTED),
+                            self.color_swatch,
+                            ft.OutlinedButton("Blanco", height=30, on_click=lambda _: self._set_preset_color("white", "#FFFFFF")),
+                            ft.OutlinedButton("PNG Transp.", height=30, on_click=lambda _: self._set_preset_color("transparent", "#1E293B")),
+                            ft.OutlinedButton("Personalizado", height=30, on_click=self._open_custom_color_dialog),
+                            ft.VerticalDivider(width=1, color=BORDER),
+                            ft.Text("Formato:", size=11, color=TEXT_MUTED),
+                            self.radio_format,
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        wrap=True,
+                        spacing=8,
+                    ),
+                    # Fila 2: Modelo + Checkboxes + Límite
+                    ft.Row(
+                        controls=[
+                            ft.Text("Modelo IA:", size=11, color=TEXT_MUTED),
+                            self.dropdown_model,
+                            ft.Text("Límite:", size=11, color=TEXT_MUTED),
+                            self.txt_batch_limit,
+                            self.chk_auto_crop,
+                            self.chk_alpha_matting,
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        wrap=True,
+                        spacing=8,
+                    ),
+                    # Fila Advertencia
+                    ft.Container(
+                        content=ft.Row(
+                            controls=[
+                                ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, color=WARNING, size=16),
+                                ft.Text(
+                                    "Estándar recomendado: 20 imágenes por intento. Puedes ampliar el límite según la capacidad de tu equipo.",
+                                    size=10,
+                                    weight=ft.FontWeight.W_500,
+                                    color=WARNING,
+                                ),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor="#3D1A05",
+                        border_radius=6,
+                        padding=ft.padding.symmetric(horizontal=10, vertical=4),
+                    ),
+                ],
+                spacing=8,
+            ),
+            bgcolor=SURFACE,
+            border_radius=8,
+            padding=12,
+            border=ft.border.all(1, BORDER),
+        )
+
+        # 4. Tarjeta de Previsualización Lado a Lado (Antes vs Después)
+        self.img_orig_placeholder = ft.Column(
+            controls=[
+                ft.Icon(ft.Icons.IMAGE_OUTLINED, size=48, color=TEXT_MUTED),
+                ft.Text("Seleccione una imagen\no presione Examinar", size=11, color=TEXT_MUTED, text_align=ft.TextAlign.CENTER),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+        self.img_orig_view = ft.Image(
+            fit=ft.BoxFit.CONTAIN,
+            visible=False,
+            border_radius=6,
+        )
+
+        self.img_res_placeholder = ft.Column(
+            controls=[
+                ft.Icon(ft.Icons.AUTO_AWESOME_OUTLINED, size=48, color=TEXT_MUTED),
+                ft.Text("Resultado procesado\naparecerá aquí", size=11, color=TEXT_MUTED, text_align=ft.TextAlign.CENTER),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+        self.img_res_view = ft.Image(
+            fit=ft.BoxFit.CONTAIN,
+            visible=False,
+            border_radius=6,
+        )
+
+        self.btn_copy_clipboard = ft.ElevatedButton(
+            "📋 Copiar al Portapapeles",
+            height=30,
+            disabled=True,
+            bgcolor="#1E3A5F",
+            color=TEXT_PRIMARY,
+            on_click=self._copy_result_to_clipboard,
+        )
+
+        preview_card = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Text("3. 👁️ Previsualización en Vivo — Antes vs. Después", size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                            self.btn_copy_clipboard,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Row(
+                        controls=[
+                            # Contenedor Imagen Original
+                            ft.Container(
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text("Original", size=11, weight=ft.FontWeight.BOLD, color=TEXT_MUTED),
+                                        ft.Container(
+                                            content=ft.Stack(
+                                                controls=[
+                                                    self.img_orig_placeholder,
+                                                    self.img_orig_view,
+                                                ],
+                                                alignment=ft.alignment.center,
+                                            ),
+                                            expand=True,
+                                            alignment=ft.alignment.center,
+                                        ),
+                                    ],
+                                    spacing=4,
+                                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                ),
+                                bgcolor=SURFACE_INNER,
+                                border_radius=8,
+                                padding=8,
+                                expand=True,
+                                height=240,
+                                border=ft.border.all(1, BORDER),
+                            ),
+                            # Contenedor Imagen Resultado
+                            ft.Container(
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text("Fondo Blanco / Resultado", size=11, weight=ft.FontWeight.BOLD, color=TEXT_MUTED),
+                                        ft.Container(
+                                            content=ft.Stack(
+                                                controls=[
+                                                    self.img_res_placeholder,
+                                                    self.img_res_view,
+                                                ],
+                                                alignment=ft.alignment.center,
+                                            ),
+                                            expand=True,
+                                            alignment=ft.alignment.center,
+                                        ),
+                                    ],
+                                    spacing=4,
+                                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                ),
+                                bgcolor=SURFACE_INNER,
+                                border_radius=8,
+                                padding=8,
+                                expand=True,
+                                height=240,
+                                border=ft.border.all(1, BORDER),
+                            ),
+                        ],
+                        spacing=12,
+                    ),
+                ],
+                spacing=8,
+            ),
+            bgcolor=SURFACE,
+            border_radius=8,
+            padding=12,
+            border=ft.border.all(1, BORDER),
+        )
+
+        # 5. Barra de Estado del Modelo y Log de Ejecución
+        self.lbl_model_status = ft.Text(
+            "⚡ Selección automática activa: analiza cada imagen y aplica el modelo óptimo (SOTA RMBG).",
+            size=11,
+            color=TEXT_MUTED,
+        )
+
+        self.progress_bar = ft.ProgressBar(
+            value=0.0,
+            color=ACCENT,
+            bgcolor="#1E3A5F",
+            height=6,
+            border_radius=3,
+        )
+
+        self.txt_log = ft.TextField(
+            multiline=True,
+            read_only=True,
+            min_lines=3,
+            max_lines=4,
+            text_size=10,
+            text_style=ft.TextStyle(font_family="Consolas"),
+            bgcolor=SURFACE_INNER,
+            border_color=BORDER,
+            expand=True,
+        )
+
+        status_card = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Container(
+                        content=self.lbl_model_status,
+                        bgcolor=SURFACE_INNER,
+                        border_radius=6,
+                        padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                        border=ft.border.all(1, BORDER),
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.Text("4. Registro de Estado:", size=11, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                        ],
+                    ),
+                    self.progress_bar,
+                    self.txt_log,
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE,
+            border_radius=8,
+            padding=12,
+            border=ft.border.all(1, BORDER),
+        )
+
+        # 6. Botones de Acción Inferiores
+        self.btn_open_folder = ft.ElevatedButton(
+            "📁 Abrir Carpeta Destino",
+            height=38,
+            bgcolor="#334155",
+            color=TEXT_PRIMARY,
+            on_click=self._open_output_folder,
+        )
+
+        self.btn_process = ft.ElevatedButton(
+            "🚀 PROCESAR Y CAMBIAR A BLANCO",
+            height=38,
+            bgcolor=ACCENT,
+            color=TEXT_PRIMARY,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+                padding=ft.padding.symmetric(horizontal=24),
+            ),
+            on_click=self._start_processing_thread,
+        )
+
+        actions_row = ft.Row(
+            controls=[
+                self.btn_open_folder,
+                self.btn_process,
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        # Añadir todos los contenedores a la página
+        page.add(
+            ft.Column(
+                controls=[
+                    header,
+                    input_card,
+                    settings_card,
+                    preview_card,
+                    status_card,
+                    actions_row,
+                ],
+                spacing=10,
+            )
+        )
+
+        self._log("Listo. Seleccione una imagen o carpeta y presione Procesar.")
+        page.update()
 
     # ------------------------------------------------------------------
-    # Previsualización e imágenes
+    # Previsualizaciones e imágenes
     # ------------------------------------------------------------------
-    # Panel fijo 300px | header ~32px | título ~26px | márgenes ~12px → imagen disponible ≈ 215px alto
-    _PREVIEW_SIZE = (380, 215)
+    def _pil_to_base64(self, pil_img: Image.Image, max_size=(500, 300)) -> str:
+        """Convierte una imagen PIL a base64 escalándola suavemente si es necesario."""
+        img = pil_img.copy()
+        img.thumbnail(max_size, Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{encoded}"
 
     def _load_original_preview(self, img_path: Path):
-        """Carga y muestra el thumbnail de la imagen original escalado al panel fijo."""
+        """Carga y muestra el thumbnail de la imagen original."""
         try:
             pil_img = Image.open(img_path)
             pil_img = ImageOps.exif_transpose(pil_img)
             self.current_orig_pil = pil_img
-            thumb = self._make_ctk_image(pil_img, size=self._PREVIEW_SIZE)
-            self.lbl_preview_orig.configure(image=thumb, text="")
+            data_uri = self._pil_to_base64(pil_img)
+
+            if self.page:
+                self.img_orig_placeholder.visible = False
+                self.img_orig_view.src = data_uri
+                self.img_orig_view.visible = True
+                self.page.update()
         except Exception as e:
             logger.debug(f"Error cargando thumbnail original: {e}")
 
     def _update_result_preview(self, result_path: Path):
-        """Carga y muestra el thumbnail del resultado procesado escalado al panel fijo."""
+        """Carga y muestra el thumbnail del resultado procesado."""
         try:
             pil_img = Image.open(result_path)
             self.current_res_pil = pil_img
-            thumb = self._make_ctk_image(pil_img, size=self._PREVIEW_SIZE)
-            self.lbl_preview_res.configure(image=thumb, text="")
-            if HAS_CLIPBOARD:
-                self.btn_copy_clipboard.configure(state="normal")
+            data_uri = self._pil_to_base64(pil_img)
+
+            if self.page:
+                self.img_res_placeholder.visible = False
+                self.img_res_view.src = data_uri
+                self.img_res_view.visible = True
+                if HAS_CLIPBOARD:
+                    self.btn_copy_clipboard.disabled = False
+                self.page.update()
         except Exception as e:
             logger.debug(f"Error cargando thumbnail resultado: {e}")
 
-    @staticmethod
-    def _make_ctk_image(pil_img: Image.Image, size=(380, 215)) -> ctk.CTkImage:
-        """Crea un CTkImage escalado proporcionalmente para caber en 'size' sin recortar."""
-        w, h = pil_img.size
-        ratio = min(size[0] / w, size[1] / h)
-        new_size = (max(1, int(w * ratio)), max(1, int(h * ratio)))
-        return ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=new_size)
+    # ------------------------------------------------------------------
+    # Manejadores de eventos y diálogos
+    # ------------------------------------------------------------------
+    def _on_mode_change(self, e):
+        self.mode = e.control.value
+        self.mode_var.set(self.mode)
+        if self.mode == "file":
+            self.txt_input_path.placeholder_text = "Seleccione una imagen (JPG, PNG, WEBP, HEIC, etc.)..."
+        else:
+            self.txt_input_path.placeholder_text = "Seleccione una carpeta con imágenes..."
+        if self.page:
+            self.page.update()
 
-    def _copy_result_to_clipboard(self):
-        """Copia la imagen procesada resultante al portapapeles de Windows."""
+    def _on_input_text_change(self, e):
+        self.input_path = e.control.value.strip()
+        self.input_path_var.set(self.input_path)
+        p = Path(self.input_path)
+        if p.exists() and p.is_file():
+            self._load_original_preview(p)
+
+    def _on_output_text_change(self, e):
+        self.output_dir = e.control.value.strip()
+        self.output_dir_var.set(self.output_dir)
+
+    def _on_format_change(self, e):
+        self.output_format = e.control.value
+        self.format_var.set(self.output_format)
+
+    def _on_model_change(self, e):
+        self.model_name = e.control.value
+        self.model_mode_var.set(self.model_name)
+
+    def _on_batch_limit_change(self, e):
+        val = e.control.value.strip()
+        try:
+            self.batch_limit = int(val) if int(val) > 0 else 20
+        except Exception:
+            self.batch_limit = 20
+        self.batch_limit_var.set(self.batch_limit)
+
+    async def _browse_input(self, e):
+        if self.mode == "file":
+            files = await self.file_picker_input.pick_files(
+                dialog_title="Seleccionar imagen",
+                allowed_extensions=["jpg", "jpeg", "png", "webp", "bmp", "tiff", "heic", "heif", "HEIC", "HEIF"],
+                file_type=ft.FilePickerFileType.CUSTOM,
+            )
+            if files and len(files) > 0:
+                p = Path(files[0].path)
+                self.input_path = str(p.resolve())
+                self.input_path_var.set(self.input_path)
+                self.txt_input_path.value = self.input_path
+                self._load_original_preview(p)
+                self._log(f"📥 Archivo seleccionado: {p.name}")
+                if self.page:
+                    self.page.update()
+        else:
+            dir_path = await self.file_picker_input.get_directory_path(
+                dialog_title="Seleccionar carpeta con imágenes",
+            )
+            if dir_path:
+                p = Path(dir_path)
+                self.input_path = str(p.resolve())
+                self.input_path_var.set(self.input_path)
+                self.txt_input_path.value = self.input_path
+                self._log(f"📁 Carpeta seleccionada: {p.name}")
+                if self.page:
+                    self.page.update()
+
+    async def _browse_output(self, e):
+        dir_path = await self.file_picker_output.get_directory_path(
+            dialog_title="Seleccionar carpeta de salida",
+        )
+        if dir_path:
+            p = Path(dir_path)
+            self.output_dir = str(p.resolve())
+            self.output_dir_var.set(self.output_dir)
+            self.txt_output_path.value = self.output_dir
+            if self.page:
+                self.page.update()
+
+    def _set_preset_color(self, name: str, hex_val: str):
+        self.bg_color = name
+        self.bg_color_var.set(name)
+        self.bg_color_hex = hex_val
+        self.color_swatch.bgcolor = hex_val
+        if name == "transparent":
+            self.output_format = "PNG"
+            self.format_var.set("PNG")
+            self.radio_format.value = "PNG"
+        if self.page:
+            self.page.update()
+
+    def _open_custom_color_dialog(self, e):
+        """Abre un diálogo interactivo para escoger color personalizado por paleta o Hex."""
+        txt_custom_hex = ft.TextField(
+            value=self.bg_color_hex,
+            label="Código Hex (#RRGGBB)",
+            dense=True,
+            width=180,
+            text_size=12,
+        )
+
+        color_presets = [
+            ("#FFFFFF", "Blanco"),
+            ("#F1F5F9", "Gris Suave"),
+            ("#94A3B8", "Gris Medio"),
+            ("#0F172A", "Negro Oscuro"),
+            ("#EF4444", "Rojo"),
+            ("#3B82F6", "Azul"),
+            ("#10B981", "Verde"),
+            ("#F59E0B", "Ámbar"),
+        ]
+
+        def pick_preset(hex_code):
+            txt_custom_hex.value = hex_code
+            if self.page:
+                self.page.update()
+
+        preset_chips = [
+            ft.Container(
+                content=ft.Text(label, size=10, color=TEXT_PRIMARY),
+                bgcolor=SURFACE_INNER,
+                border=ft.border.all(1, hex_code),
+                border_radius=4,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                on_click=lambda _, h=hex_code: pick_preset(h),
+            )
+            for hex_code, label in color_presets
+        ]
+
+        def apply_color(_):
+            val = txt_custom_hex.value.strip()
+            if not val.startswith("#"):
+                val = f"#{val}"
+            try:
+                parse_color_string(val)
+                self.bg_color = val
+                self.bg_color_var.set(val)
+                self.bg_color_hex = val
+                self.color_swatch.bgcolor = val
+                self.page.pop_dialog()
+                self.page.update()
+            except Exception:
+                self._show_alert("Color Inválido", "El formato ingresado no es un color hexadecimal válido (ej: #FFFFFF).")
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Color de Fondo Personalizado", size=14, weight=ft.FontWeight.BOLD),
+            content=ft.Column(
+                controls=[
+                    ft.Text("Seleccione un color predefinido o escriba el código hexadecimal:", size=11, color=TEXT_MUTED),
+                    ft.Row(controls=preset_chips, wrap=True, spacing=6),
+                    txt_custom_hex,
+                ],
+                spacing=10,
+                tight=True,
+            ),
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda _: self.page.pop_dialog()),
+                ft.ElevatedButton("Aplicar", bgcolor=ACCENT, color=TEXT_PRIMARY, on_click=apply_color),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page.show_dialog(dlg)
+
+    def _copy_result_to_clipboard(self, e):
+        """Copia la imagen procesada resultante al portapapeles de Windows en formato DIB."""
         if not HAS_CLIPBOARD or self.current_res_pil is None:
-            messagebox.showwarning("Atención", "No hay imagen procesada disponible para copiar.")
+            self._show_alert("Atención", "No hay imagen procesada disponible para copiar.")
             return
         try:
             out = io.BytesIO()
             self.current_res_pil.convert("RGB").save(out, "BMP")
-            data = out.getvalue()[14:]  # Omitir cabecera BMP de 14 bytes
+            data = out.getvalue()[14:]  # Omitir encabezado BMP de 14 bytes
             out.close()
 
             win32clipboard.OpenClipboard()
@@ -428,151 +828,131 @@ class BackgroundRemoverGUI(CTkWithDnD):
             win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
             win32clipboard.CloseClipboard()
 
-            messagebox.showinfo("Copiado", "¡Imagen copiada al portapapeles de Windows! Puedes pegarla directamente con Ctrl+V.")
+            self._show_snackbar("¡Imagen copiada al portapapeles! Puedes pegarla con Ctrl+V.")
             self._log("📋 Imagen copiada al portapapeles de Windows (Ctrl+V listo).")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo copiar al portapapeles: {e}")
+        except Exception as err:
+            self._show_alert("Error", f"No se pudo copiar al portapapeles: {err}")
 
-    # ------------------------------------------------------------------
-    # Eventos y acciones
-    # ------------------------------------------------------------------
-    def _on_mode_change(self):
-        if self.mode_var.get() == "file":
-            self.input_label.configure(text="Origen:")
-        else:
-            self.input_label.configure(text="Carpeta:")
-
-    def _browse_input(self):
-        if self.mode_var.get() == "file":
-            path = filedialog.askopenfilename(
-                title="Seleccionar imagen",
-                filetypes=[
-                    ("Imágenes compatibles", "*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.tiff;*.heic;*.heif;*.HEIC;*.HEIF"),
-                    ("Fotos Apple HEIC/HEIF", "*.heic;*.heif;*.HEIC;*.HEIF"),
-                    ("Todos los archivos", "*.*")
-                ]
-            )
-            if path:
-                p = Path(path)
-                self.input_path_var.set(str(p.resolve()))
-
-                self._load_original_preview(p)
-        else:
-            path = filedialog.askdirectory(title="Seleccionar carpeta con imágenes")
-            if path:
-                self.input_path_var.set(path)
-
-    def _browse_output(self):
-        path = filedialog.askdirectory(title="Seleccionar carpeta de salida")
-        if path:
-            self.output_dir_var.set(path)
-
-    def _choose_color(self):
-        from tkinter import colorchooser
-        color = colorchooser.askcolor(title="Seleccionar Color de Fondo", initialcolor=self.bg_color_hex)
-        if color and color[1]:
-            self.bg_color_hex = color[1]
-            self.bg_color_var.set(color[1])
-            self.color_swatch.configure(fg_color=self.bg_color_hex)
-
-    def _set_preset_color(self, name: str, hex_val: str):
-        self.bg_color_var.set(name)
-        self.bg_color_hex = hex_val
-        self.color_swatch.configure(fg_color=hex_val)
-        if name == "transparent":
-            self.format_var.set("PNG")
-
-    def _open_output_folder(self):
-        out = Path(self.output_dir_var.get() or "output")
+    def _open_output_folder(self, e):
+        out = Path(self.output_dir or "output")
         out.mkdir(parents=True, exist_ok=True)
         try:
             os.startfile(str(out.resolve()))
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo abrir la carpeta: {e}")
+        except Exception as err:
+            self._show_alert("Error", f"No se pudo abrir la carpeta de destino: {err}")
 
     def _log(self, msg: str):
-        self.log_box.configure(state="normal")
-        self.log_box.insert("end", f"{msg}\n")
-        self.log_box.see("end")
-        self.log_box.configure(state="disabled")
+        logger.info(msg)
+        if self.page:
+            current = self.txt_log.value or ""
+            self.txt_log.value = f"{current}\n{msg}".strip() if current else msg
+            self.page.update()
 
-    def _update_model_info(self, result):
-        if result is None:
-            self.model_info_label.configure(
-                text="  Modelo manual seleccionado.",
-                text_color=TEXT_MUTED,
-            )
+    def _show_alert(self, title: str, message: str):
+        if not self.page:
             return
-        pct = f"{result.confidence:.0%}"
-        txt = f"  🎯 Modelo aplicado: {result.model_name} ({pct} confianza) — {result.reason}"
-        self.model_info_label.configure(text=txt, text_color=SUCCESS)
+        dlg = ft.AlertDialog(
+            title=ft.Text(title, weight=ft.FontWeight.BOLD),
+            content=ft.Text(message),
+            actions=[
+                ft.TextButton("Aceptar", on_click=lambda _: self.page.pop_dialog())
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page.show_dialog(dlg)
+
+    def _show_snackbar(self, message: str):
+        if not self.page:
+            return
+        self.page.show_dialog(ft.SnackBar(content=ft.Text(message)))
 
     def _set_ui_state(self, processing: bool):
         self.is_processing = processing
-        state = "disabled" if processing else "normal"
-        self.btn_process.configure(state=state)
-        self.btn_browse_input.configure(state=state)
-        self.btn_browse_output.configure(state=state)
+        if self.page:
+            self.btn_process.disabled = processing
+            self.page.update()
 
-    def _start_processing_thread(self):
+    def _update_model_info(self, result):
+        if not self.page:
+            return
+        if result is None:
+            self.lbl_model_status.value = "  Modelo manual seleccionado."
+            self.lbl_model_status.color = TEXT_MUTED
+        else:
+            pct = f"{result.confidence:.0%}"
+            self.lbl_model_status.value = f"  🎯 Modelo aplicado: {result.model_name} ({pct} confianza) — {result.reason}"
+            self.lbl_model_status.color = SUCCESS
+        self.page.update()
+
+    # ------------------------------------------------------------------
+    # Procesamiento en segundo plano
+    # ------------------------------------------------------------------
+    def _start_processing_thread(self, e):
         if self.is_processing:
             return
 
-        input_str = self.input_path_var.get().strip()
-        output_str = self.output_dir_var.get().strip()
+        input_str = self.input_path.strip()
+        output_str = self.output_dir.strip()
 
         if not input_str:
-            messagebox.showwarning("Atención", "Por favor seleccione una imagen o carpeta de origen.")
+            self._show_alert("Atención", "Por favor seleccione una imagen o carpeta de origen.")
             return
         if not output_str:
-            messagebox.showwarning("Atención", "Por favor seleccione una carpeta de destino.")
+            self._show_alert("Atención", "Por favor seleccione una carpeta de destino.")
             return
 
         input_path = Path(input_str)
         if not input_path.exists():
-            messagebox.showerror("Error", f"La ruta de entrada no existe:\n{input_path}")
+            self._show_alert("Error", f"La ruta de entrada no existe:\n{input_path}")
             return
 
-        model_choice = self.model_mode_var.get()
-        self.batch_service.config.processing.model_name = model_choice
+        self.batch_service.config.processing.model_name = self.model_name
         self._save_user_preferences()
 
         self._set_ui_state(True)
-        self.progress_bar.set(0)
-        self.model_info_label.configure(text="  ⏳ Analizando imagen y ejecutando IA...", text_color=TEXT_MUTED)
+        self.progress_bar.value = 0.0
+        self.lbl_model_status.value = "  ⏳ Analizando imagen y ejecutando IA..."
+        self.lbl_model_status.color = TEXT_MUTED
+        if self.page:
+            self.page.update()
 
         t = threading.Thread(target=self._run_processing, args=(input_path, Path(output_str)), daemon=True)
         t.start()
 
     def _run_processing(self, input_path: Path, output_dir: Path):
         output_dir.mkdir(parents=True, exist_ok=True)
-        bg_color = self.bg_color_var.get()
-        out_format = self.format_var.get()
-        auto_crop = self.auto_crop_var.get()
-        alpha_matting = self.alpha_matting_var.get()
+        bg_color = self.bg_color
+        out_format = self.output_format
+        auto_crop = self.auto_crop
+        alpha_matting = self.alpha_matting
         self.batch_service.config.processing.alpha_matting = alpha_matting
         self.batch_service.config.processing.output_format = out_format
 
         if input_path.is_file():
-            self.after(0, lambda: self._load_original_preview(input_path))
+            self._load_original_preview(input_path)
             self._log(f"\n--- Procesando: {input_path.name} ---")
-            self.progress_bar.set(0.3)
+            self.progress_bar.value = 0.3
+            if self.page:
+                self.page.update()
+
             success, out_path, err = self.batch_service.process_single_image(
                 input_path=input_path,
                 output_path=self.file_manager.determine_output_path(input_path, output_dir=output_dir, output_format=out_format),
-                bg_color=bg_color, output_format=out_format, auto_crop=auto_crop,
+                bg_color=bg_color,
+                output_format=out_format,
+                auto_crop=auto_crop,
             )
-            self.progress_bar.set(1.0)
+            self.progress_bar.value = 1.0
             sel = self.batch_service.remover.last_selection
-            self.after(0, lambda s=sel: self._update_model_info(s))
+            self._update_model_info(sel)
 
             if success:
-                self.after(0, lambda p=out_path: self._update_result_preview(p))
+                self._update_result_preview(out_path)
                 self._log(f"[OK] Guardado: {out_path.name}")
-                self.after(0, lambda: messagebox.showinfo("Completado", f"¡Imagen procesada con éxito!\nGuardada en: {out_path}"))
+                self._show_alert("Completado", f"¡Imagen procesada con éxito!\nGuardada en: {out_path}")
             else:
                 self._log(f"[ERROR] {err}")
-                self.after(0, lambda: messagebox.showerror("Error", f"No se pudo procesar:\n{err}"))
+                self._show_alert("Error", f"No se pudo procesar:\n{err}")
 
         elif input_path.is_dir():
             images = self.file_manager.get_input_images(input_path)
@@ -580,16 +960,11 @@ class BackgroundRemoverGUI(CTkWithDnD):
 
             if total_found == 0:
                 self._log("[AVISO] No se encontraron imágenes compatibles.")
-                self.after(0, lambda: messagebox.showwarning("Sin Imágenes", "No se encontraron imágenes compatibles."))
-                self.after(0, lambda: self._set_ui_state(False))
+                self._show_alert("Sin Imágenes", "No se encontraron imágenes compatibles.")
+                self._set_ui_state(False)
                 return
 
-            try:
-                raw_limit = self.batch_limit_var.get()
-                limit = int(raw_limit) if int(raw_limit) > 0 else 20
-            except Exception:
-                limit = 20
-
+            limit = self.batch_limit if self.batch_limit > 0 else 20
             if total_found > limit:
                 self._log(f"[AVISO] {total_found} imágenes detectadas. Procesando primeras {limit} según el límite configurado.")
                 images = images[:limit]
@@ -600,57 +975,60 @@ class BackgroundRemoverGUI(CTkWithDnD):
 
             for idx, img in enumerate(images, 1):
                 self._log(f"[{idx}/{total}] {img.name}...")
-                self.after(0, lambda p=img: self._load_original_preview(p))
+                self._load_original_preview(img)
                 dest = self.file_manager.determine_output_path(img, output_dir=output_dir, output_format=out_format)
                 success, out_path, err = self.batch_service.process_single_image(
-                    input_path=img, output_path=dest,
-                    bg_color=bg_color, output_format=out_format, auto_crop=auto_crop,
+                    input_path=img,
+                    output_path=dest,
+                    bg_color=bg_color,
+                    output_format=out_format,
+                    auto_crop=auto_crop,
                 )
                 if success:
                     ok += 1
                     sel = self.batch_service.remover.last_selection
-                    self.after(0, lambda s=sel: self._update_model_info(s))
-                    self.after(0, lambda p=out_path: self._update_result_preview(p))
+                    self._update_model_info(sel)
+                    self._update_result_preview(out_path)
                     self._log(f"   -> [OK] {out_path.name}")
                 else:
                     fail += 1
                     self._log(f"   -> [FALLO] {err}")
-                self.after(0, lambda v=idx/total: self.progress_bar.set(v))
+
+                self.progress_bar.value = idx / total
+                if self.page:
+                    self.page.update()
 
             self._log(f"\n[FINALIZADO] Exitosas: {ok}/{total} | Fallidas: {fail}/{total}")
-            self.after(0, lambda: messagebox.showinfo(
+            self._show_alert(
                 "Lote Finalizado",
-                f"Proceso por lotes finalizado:\n• Exitosas: {ok}\n• Fallidas: {fail}\n\nGuardadas en: {output_dir}"
-            ))
+                f"Proceso por lotes finalizado:\n• Exitosas: {ok}\n• Fallidas: {fail}\n\nGuardadas en: {output_dir}",
+            )
 
-        self.after(0, lambda: self._set_ui_state(False))
+        self._set_ui_state(False)
 
     def _save_user_preferences(self):
         """Guarda las preferencias actuales en AppData."""
         try:
             settings_manager.save_settings({
-                "output_dir": self.output_dir_var.get().strip(),
-                "bg_color": self.bg_color_var.get(),
+                "output_dir": self.output_dir.strip(),
+                "bg_color": self.bg_color,
                 "bg_color_hex": self.bg_color_hex,
-                "output_format": self.format_var.get(),
-                "auto_crop": self.auto_crop_var.get(),
-                "alpha_matting": self.alpha_matting_var.get(),
-                "batch_limit": self.batch_limit_var.get(),
-                "model_name": self.model_mode_var.get(),
+                "output_format": self.output_format,
+                "auto_crop": self.auto_crop,
+                "alpha_matting": self.alpha_matting,
+                "batch_limit": self.batch_limit,
+                "model_name": self.model_name,
             })
         except Exception as e:
             logger.debug(f"No se pudieron guardar preferencias: {e}")
 
-    def _on_close(self):
-        """Manejador de cierre de ventana."""
-        self._save_user_preferences()
-        self.destroy()
 
-
-def launch_gui() -> None:
-    """Punto de entrada de la interfaz gráfica."""
-    app = BackgroundRemoverGUI()
-    app.mainloop()
+def launch_gui(page: Optional[ft.Page] = None) -> None:
+    """Punto de entrada de la interfaz gráfica con Flet."""
+    if page is not None:
+        BackgroundRemoverGUI(page)
+    else:
+        ft.run(lambda p: BackgroundRemoverGUI(p))
 
 
 if __name__ == "__main__":

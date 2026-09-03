@@ -66,8 +66,8 @@ background_remover/
 │   │   └── tracker_service.py               # Persistencia de métricas y estadísticas
 │   │
 │   ├── ui/
-│   │   ├── app_gui.py                       # Interfaz gráfica interactiva CustomTkinter
-│   │   └── splash_screen.py                 # Pantalla de carga (Splash Screen) inmediata
+│   │   ├── __init__.py
+│   │   └── app_gui.py                       # Interfaz gráfica interactiva y moderna con Flet
 │   │
 │   └── utils/
 │       ├── __init__.py
@@ -236,7 +236,7 @@ Para generar un ejecutable independiente de Windows que empaquete la interfaz gr
 
 2. **Compilar la Aplicación**:
    ```bash
-   python -m PyInstaller --noconsole --onefile --splash "assets/splash.png" --collect-all customtkinter --collect-all tkinterdnd2 --copy-metadata pymatting --copy-metadata rembg --add-data "assets;assets" --icon="assets/app_icon.ico" --name "BackgroundRemover" main.py
+   python -m PyInstaller --noconsole --onefile --splash "assets/splash.png" --collect-all flet --copy-metadata pymatting --copy-metadata rembg --add-data "assets;assets" --icon="assets/app_icon.ico" --name "BackgroundRemover" main.py
    ```
    > `--splash` muestra la imagen durante la extracción del `.exe` (fase de mayor espera).
    > `assets/splash.png` se incluye automáticamente vía `--add-data "assets;assets"`.

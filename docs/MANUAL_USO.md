@@ -79,7 +79,7 @@ Para crear el archivo ejecutable de Windows standalone:
 
 ```bash
 pip install pyinstaller
-python -m PyInstaller --noconsole --onefile --collect-all customtkinter --collect-all tkinterdnd2 --copy-metadata pymatting --copy-metadata rembg --add-data "assets;assets" --icon="assets/app_icon.ico" --name "BackgroundRemover" main.py
+python -m PyInstaller --noconsole --onefile --collect-all flet --copy-metadata pymatting --copy-metadata rembg --add-data "assets;assets" --icon="assets/app_icon.ico" --name "BackgroundRemover" main.py
 ```
 
 El ejecutable estará disponible en `dist/BackgroundRemover.exe`.
