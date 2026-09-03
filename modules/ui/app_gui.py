@@ -1,17 +1,13 @@
 """
-Interfaz Gráfica moderna, estética y de alto rendimiento construida con Flet para Background Remover Pro.
-Diseño visual premium estilo Dark Mode Studio:
-  - Header con badges de marca Altikore e IA
-  - Selector de modo moderno mediante SegmentedButton (Archivo vs Lote)
-  - Explorador de archivos nativo con ft.FilePicker en page.services
-  - Selectores de color interactivos con swatches circulares y diálogo modal con paleta HEX
-  - Selector de formato estilizado con SegmentedButton (JPEG / PNG / WEBP)
-  - Interruptores modernos (ft.Switch) para Auto-crop y Alpha Matting
-  - Vista previa en vivo Antes vs. Después (Side-by-side) con frames independientes
-  - Botón de 1 clic para copiar la imagen procesada al portapapeles de Windows (DIB)
-  - Telemetría en tiempo real del modelo de visión IA aplicado y nivel de confianza
-  - Barra de progreso con acento azul y consola de registro integrada con tipografía monospace
-  - Botón principal de procesamiento con diseño prominente
+Interfaz Gráfica moderna, estética y compacta construida con Flet para Background Remover Pro.
+Diseño Zero-Scroll (vista única sin desplazamiento vertical):
+  - Encabezado ultra-compacto con branding Altikore y badge PRO AI
+  - Selector de modo y rutas con FilePicker nativo
+  - Panel de ajustes compacto con swatch de color, selector modal y SegmentedButtons
+  - Vista previa en vivo Antes vs. Después (Side-by-side) de altura optimizada
+  - Copiado de 1 clic al portapapeles de Windows (formato DIB)
+  - Barra de telemetría y consola de logs compacta
+  - Barra de acción inferior con botón prominente de procesamiento
 """
 
 import os
@@ -49,7 +45,6 @@ BORDER_COLOR = "#22304A"
 BORDER_SUBTLE = "#1A2538"
 ACCENT = "#2563EB"
 ACCENT_LIGHT = "#3B82F6"
-ACCENT_GLOW = "#60A5FA"
 SUCCESS = "#10B981"
 WARNING = "#F59E0B"
 DANGER = "#EF4444"
@@ -73,7 +68,7 @@ class _VarAdapter:
 
 
 class BackgroundRemoverGUI:
-    """Controlador y vista principal con diseño premium para Background Remover."""
+    """Controlador y vista principal con diseño compacto Zero-Scroll."""
 
     def __init__(self, page: Optional[ft.Page] = None):
         saved_output = settings_manager.get("output_dir", "")
@@ -123,18 +118,19 @@ class BackgroundRemoverGUI:
                 pass
 
     def _setup_page(self):
-        """Configuración de parámetros globales de ventana y tema."""
+        """Configuración de ventana ajustada para Zero-Scroll absoluto."""
         page = self.page
         page.title = "Background Remover Pro — Fondo Blanco Inteligente"
         page.theme_mode = ft.ThemeMode.DARK
         page.bgcolor = BG_APP
-        page.padding = 16
-        page.scroll = ft.ScrollMode.AUTO
+        page.padding = 10
+        page.scroll = None  # Cero scroll garantizado
 
+        # Dimensiones optimizadas para pantallas estándar (768p / 800p / 900p / 1080p)
         page.window.width = 960
-        page.window.height = 890
+        page.window.height = 750
         page.window.min_width = 900
-        page.window.min_height = 800
+        page.window.min_height = 700
         page.window.resizable = True
         page.run_task(page.window.center)
 
@@ -152,76 +148,55 @@ class BackgroundRemoverGUI:
             page.services.append(self.file_picker)
 
         # ==============================================================================
-        # 1. HEADER MODERNO CON BRANDING
+        # 1. HEADER COMPACTO CON BRANDING (altura ~36px)
         # ==============================================================================
         header = ft.Container(
             content=ft.Row(
                 controls=[
                     ft.Row(
                         controls=[
+                            ft.Text("✨", size=18),
+                            ft.Text("Background Remover", size=15, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
                             ft.Container(
-                                content=ft.Text("✨", size=24),
-                                padding=8,
-                                bgcolor=CARD_INNER,
-                                border_radius=10,
-                                border=ft.Border.all(1, BORDER_COLOR),
+                                content=ft.Text("PRO AI", size=8, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                                bgcolor=ACCENT,
+                                padding=ft.Padding.symmetric(horizontal=5, vertical=1),
+                                border_radius=4,
                             ),
-                            ft.Column(
-                                controls=[
-                                    ft.Row(
-                                        controls=[
-                                            ft.Text("Background Remover", size=18, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
-                                            ft.Container(
-                                                content=ft.Text("PRO AI", size=9, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
-                                                bgcolor=ACCENT,
-                                                padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                                                border_radius=4,
-                                            ),
-                                        ],
-                                        spacing=8,
-                                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                    ),
-                                    ft.Text("Fondo Blanco Inteligente & Aislamiento de Objetos con Redes Neuronales", size=11, color=TEXT_MUTED),
-                                ],
-                                spacing=2,
-                            ),
+                            ft.Text("•  Fondo Blanco Inteligente & Aislamiento con IA", size=11, color=TEXT_MUTED),
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=12,
+                        spacing=6,
                     ),
                     ft.Container(
                         content=ft.Row(
                             controls=[
-                                ft.Icon(ft.Icons.VERIFIED_ROUNDED, size=14, color=ACCENT_LIGHT),
-                                ft.Text("Desarrollado por Altikore", size=11, weight=ft.FontWeight.BOLD, color=ACCENT_LIGHT),
+                                ft.Icon(ft.Icons.VERIFIED_ROUNDED, size=13, color=ACCENT_LIGHT),
+                                ft.Text("Desarrollado por Altikore", size=10, weight=ft.FontWeight.BOLD, color=ACCENT_LIGHT),
                             ],
-                            spacing=6,
+                            spacing=4,
                         ),
                         bgcolor=CARD_INNER,
-                        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
-                        border_radius=20,
+                        padding=ft.Padding.symmetric(horizontal=8, vertical=3),
+                        border_radius=12,
                         border=ft.Border.all(1, BORDER_COLOR),
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            gradient=ft.LinearGradient(
-                begin=ft.Alignment.TOP_LEFT,
-                end=ft.Alignment.BOTTOM_RIGHT,
-                colors=[CARD_BG, "#0F1626"],
-            ),
-            border_radius=12,
-            padding=ft.Padding.symmetric(horizontal=18, vertical=12),
+            bgcolor=CARD_BG,
+            border_radius=8,
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             border=ft.Border.all(1, BORDER_COLOR),
         )
 
         # ==============================================================================
-        # 2. SECCIÓN: MODO Y RUTAS DE ARCHIVOS
+        # 2. SECCIÓN: MODO Y RUTAS DE ARCHIVOS (altura ~86px)
         # ==============================================================================
         self.seg_mode = ft.SegmentedButton(
             [
-                ft.Segment(value="file", label=ft.Text("Archivo individual"), icon=ft.Icon(ft.Icons.IMAGE_OUTLINED, size=16)),
-                ft.Segment(value="folder", label=ft.Text("Carpeta en Lote"), icon=ft.Icon(ft.Icons.FOLDER_SPECIAL_OUTLINED, size=16)),
+                ft.Segment(value="file", label=ft.Text("Archivo individual", size=11), icon=ft.Icon(ft.Icons.IMAGE_OUTLINED, size=14)),
+                ft.Segment(value="folder", label=ft.Text("Carpeta en Lote", size=11), icon=ft.Icon(ft.Icons.FOLDER_SPECIAL_OUTLINED, size=14)),
             ],
             selected=["file"],
             allow_multiple_selection=False,
@@ -232,12 +207,12 @@ class BackgroundRemoverGUI:
             value=self.input_path,
             hint_text="Seleccione o examine una imagen compatible (JPG, PNG, WEBP, HEIC, etc.)...",
             prefix_icon=ft.Icons.INSERT_DRIVE_FILE_OUTLINED,
-            text_size=12,
+            text_size=11,
             dense=True,
             expand=True,
             bgcolor=CARD_INNER,
             border_color=BORDER_COLOR,
-            border_radius=8,
+            border_radius=6,
             on_change=self._on_input_text_change,
         )
 
@@ -245,12 +220,12 @@ class BackgroundRemoverGUI:
             value=self.output_dir,
             hint_text="Carpeta de destino para las imágenes procesadas...",
             prefix_icon=ft.Icons.FOLDER_OUTLINED,
-            text_size=12,
+            text_size=11,
             dense=True,
             expand=True,
             bgcolor=CARD_INNER,
             border_color=BORDER_COLOR,
-            border_radius=8,
+            border_radius=6,
             on_change=self._on_output_text_change,
         )
 
@@ -261,10 +236,10 @@ class BackgroundRemoverGUI:
                         controls=[
                             ft.Row(
                                 controls=[
-                                    ft.Icon(ft.Icons.FOLDER_OPEN_ROUNDED, size=16, color=ACCENT_LIGHT),
-                                    ft.Text("1. Modo y Ubicación de Archivos", size=13, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                                    ft.Icon(ft.Icons.FOLDER_OPEN_ROUNDED, size=14, color=ACCENT_LIGHT),
+                                    ft.Text("1. Modo y Ubicación:", size=11, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
                                 ],
-                                spacing=8,
+                                spacing=6,
                             ),
                             self.seg_mode,
                         ],
@@ -272,61 +247,63 @@ class BackgroundRemoverGUI:
                     ),
                     ft.Row(
                         controls=[
-                            ft.Text("Origen:", size=11, color=TEXT_MUTED, width=60),
+                            ft.Text("Origen:", size=11, color=TEXT_MUTED, width=52),
                             self.txt_input_path,
                             ft.ElevatedButton(
                                 "Examinar",
                                 icon=ft.Icons.FOLDER_OPEN,
                                 bgcolor=ACCENT,
                                 color=TEXT_PRIMARY,
-                                height=38,
-                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+                                height=30,
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
                                 on_click=self._browse_input,
                             ),
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=6,
                     ),
                     ft.Row(
                         controls=[
-                            ft.Text("Destino:", size=11, color=TEXT_MUTED, width=60),
+                            ft.Text("Destino:", size=11, color=TEXT_MUTED, width=52),
                             self.txt_output_path,
                             ft.ElevatedButton(
                                 "Examinar",
                                 icon=ft.Icons.DRIVE_FOLDER_UPLOAD,
                                 bgcolor="#1E293B",
                                 color=TEXT_PRIMARY,
-                                height=38,
-                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+                                height=30,
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
                                 on_click=self._browse_output,
                             ),
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=6,
                     ),
                 ],
-                spacing=10,
+                spacing=5,
             ),
             bgcolor=CARD_BG,
-            border_radius=12,
-            padding=14,
+            border_radius=8,
+            padding=ft.Padding.all(8),
             border=ft.Border.all(1, BORDER_COLOR),
         )
 
         # ==============================================================================
-        # 3. SECCIÓN: AJUSTES Y MOTOR DE IA
+        # 3. SECCIÓN: AJUSTES Y MOTOR DE IA (altura ~92px)
         # ==============================================================================
         self.color_swatch = ft.Container(
-            width=20,
-            height=20,
+            width=16,
+            height=16,
             bgcolor=self.bg_color_hex,
-            border_radius=6,
-            border=ft.Border.all(1.5, "#FFFFFF" if self.bg_color == "white" else BORDER_COLOR),
+            border_radius=4,
+            border=ft.Border.all(1, "#FFFFFF" if self.bg_color == "white" else BORDER_COLOR),
         )
 
         self.seg_format = ft.SegmentedButton(
             [
-                ft.Segment(value="JPEG", label=ft.Text("JPEG")),
-                ft.Segment(value="PNG", label=ft.Text("PNG")),
-                ft.Segment(value="WEBP", label=ft.Text("WEBP")),
+                ft.Segment(value="JPEG", label=ft.Text("JPEG", size=10)),
+                ft.Segment(value="PNG", label=ft.Text("PNG", size=10)),
+                ft.Segment(value="WEBP", label=ft.Text("WEBP", size=10)),
             ],
             selected=[self.output_format],
             allow_multiple_selection=False,
@@ -344,24 +321,24 @@ class BackgroundRemoverGUI:
                 ft.dropdown.Option("silueta", "silueta (Ultra Rápido - Bajo Consumo)"),
             ],
             value=self.model_name,
-            text_size=11,
+            text_size=10,
             dense=True,
-            width=290,
+            width=280,
             bgcolor=CARD_INNER,
             border_color=BORDER_COLOR,
-            border_radius=8,
+            border_radius=6,
             on_select=self._on_model_change,
         )
 
         self.txt_batch_limit = ft.TextField(
             value=str(self.batch_limit),
-            width=60,
-            text_size=11,
+            width=50,
+            text_size=10,
             text_align=ft.TextAlign.CENTER,
             dense=True,
             bgcolor=CARD_INNER,
             border_color=BORDER_COLOR,
-            border_radius=8,
+            border_radius=6,
             on_change=self._on_batch_limit_change,
         )
 
@@ -389,42 +366,42 @@ class BackgroundRemoverGUI:
                                 controls=[
                                     ft.Row(
                                         controls=[
-                                            ft.Icon(ft.Icons.PALETTE_OUTLINED, size=16, color=ACCENT_LIGHT),
-                                            ft.Text("2. Ajustes:", size=13, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                                            ft.Icon(ft.Icons.PALETTE_OUTLINED, size=14, color=ACCENT_LIGHT),
+                                            ft.Text("2. Ajustes:", size=11, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
                                         ],
-                                        spacing=6,
+                                        spacing=5,
                                     ),
-                                    ft.Text("Fondo:", size=11, color=TEXT_MUTED),
+                                    ft.Text("Fondo:", size=10, color=TEXT_MUTED),
                                     self.color_swatch,
                                     ft.OutlinedButton(
-                                        "⚪ Blanco",
-                                        height=32,
-                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
+                                        "Blanco",
+                                        height=26,
+                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=5)),
                                         on_click=lambda _: self._set_preset_color("white", "#FFFFFF"),
                                     ),
                                     ft.OutlinedButton(
-                                        "🏁 PNG Transp.",
-                                        height=32,
-                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
+                                        "PNG Transp.",
+                                        height=26,
+                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=5)),
                                         on_click=lambda _: self._set_preset_color("transparent", "#1E293B"),
                                     ),
                                     ft.OutlinedButton(
-                                        "🎨 Personalizado...",
-                                        height=32,
-                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
+                                        "Personalizado...",
+                                        height=26,
+                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=5)),
                                         on_click=self._open_custom_color_dialog,
                                     ),
                                 ],
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                spacing=8,
+                                spacing=6,
                             ),
                             ft.Row(
                                 controls=[
-                                    ft.Text("Formato:", size=11, color=TEXT_MUTED),
+                                    ft.Text("Formato:", size=10, color=TEXT_MUTED),
                                     self.seg_format,
                                 ],
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                spacing=8,
+                                spacing=6,
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -434,100 +411,100 @@ class BackgroundRemoverGUI:
                         controls=[
                             ft.Row(
                                 controls=[
-                                    ft.Text("Modelo IA:", size=11, color=TEXT_MUTED),
+                                    ft.Text("Modelo IA:", size=10, color=TEXT_MUTED),
                                     self.dropdown_model,
                                 ],
-                                spacing=6,
+                                spacing=5,
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                             ft.Row(
                                 controls=[
-                                    ft.Text("Límite:", size=11, color=TEXT_MUTED),
+                                    ft.Text("Límite:", size=10, color=TEXT_MUTED),
                                     self.txt_batch_limit,
                                 ],
-                                spacing=6,
+                                spacing=5,
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                             self.switch_auto_crop,
                             self.switch_alpha_matting,
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=14,
+                        spacing=10,
                     ),
                     # Fila 3: Advertencia recomendada
                     ft.Container(
                         content=ft.Row(
                             controls=[
-                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, color=WARNING, size=16),
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, color=WARNING, size=13),
                                 ft.Text(
-                                    "Estándar recomendado: 20 imágenes por intento para máxima estabilidad. Puedes ampliar el límite según tu equipo.",
-                                    size=10,
+                                    "Recomendado: 20 imágenes por intento para máxima estabilidad. Amplíe según la memoria de su equipo.",
+                                    size=9.5,
                                     weight=ft.FontWeight.W_500,
                                     color=WARNING,
                                 ),
                             ],
-                            spacing=8,
+                            spacing=6,
                         ),
                         bgcolor="#291A04",
-                        border_radius=8,
-                        padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=5,
+                        padding=ft.Padding.symmetric(horizontal=8, vertical=3),
                         border=ft.Border.all(1, "#523608"),
                     ),
                 ],
-                spacing=10,
+                spacing=5,
             ),
             bgcolor=CARD_BG,
-            border_radius=12,
-            padding=14,
+            border_radius=8,
+            padding=ft.Padding.all(8),
             border=ft.Border.all(1, BORDER_COLOR),
         )
 
         # ==============================================================================
-        # 4. SECCIÓN: PREVISUALIZACIÓN EN VIVO LADO A LADO (ANTES VS DESPUÉS)
+        # 4. SECCIÓN: PREVISUALIZACIÓN EN VIVO LADO A LADO (altura ~220px)
         # ==============================================================================
         self.img_orig_placeholder = ft.Column(
             controls=[
-                ft.Icon(ft.Icons.ADD_PHOTO_ALTERNATE_OUTLINED, size=52, color=TEXT_DIM),
-                ft.Text("Arrastre una imagen o presione Examinar", size=12, color=TEXT_MUTED, weight=ft.FontWeight.W_500),
-                ft.Text("Soporta JPG, PNG, WEBP, BMP, TIFF, HEIC", size=10, color=TEXT_DIM),
+                ft.Icon(ft.Icons.ADD_PHOTO_ALTERNATE_OUTLINED, size=40, color=TEXT_DIM),
+                ft.Text("Seleccione una imagen o presione Examinar", size=11, color=TEXT_MUTED, weight=ft.FontWeight.W_500),
+                ft.Text("JPG, PNG, WEBP, BMP, TIFF, HEIC", size=9, color=TEXT_DIM),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=4,
+            spacing=2,
         )
 
         self.img_orig_view = ft.Image(
             src="",
             fit=ft.BoxFit.CONTAIN,
             visible=False,
-            border_radius=8,
+            border_radius=6,
         )
 
         self.img_res_placeholder = ft.Column(
             controls=[
-                ft.Icon(ft.Icons.AUTO_AWESOME_OUTLINED, size=52, color=TEXT_DIM),
-                ft.Text("El resultado procesado aparecerá aquí", size=12, color=TEXT_MUTED, weight=ft.FontWeight.W_500),
-                ft.Text("Listo para guardar o copiar al portapapeles", size=10, color=TEXT_DIM),
+                ft.Icon(ft.Icons.AUTO_AWESOME_OUTLINED, size=40, color=TEXT_DIM),
+                ft.Text("El resultado procesado aparecerá aquí", size=11, color=TEXT_MUTED, weight=ft.FontWeight.W_500),
+                ft.Text("Listo para guardar o copiar al portapapeles", size=9, color=TEXT_DIM),
             ],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=4,
+            spacing=2,
         )
 
         self.img_res_view = ft.Image(
             src="",
             fit=ft.BoxFit.CONTAIN,
             visible=False,
-            border_radius=8,
+            border_radius=6,
         )
 
         self.btn_copy_clipboard = ft.ElevatedButton(
             "📋 Copiar al Portapapeles",
-            height=32,
+            height=28,
             disabled=True,
             bgcolor="#1E3A5F",
             color=TEXT_PRIMARY,
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=5)),
             on_click=self._copy_result_to_clipboard,
         )
 
@@ -538,10 +515,10 @@ class BackgroundRemoverGUI:
                         controls=[
                             ft.Row(
                                 controls=[
-                                    ft.Icon(ft.Icons.REMOVE_RED_EYE_OUTLINED, size=16, color=ACCENT_LIGHT),
-                                    ft.Text("3. Previsualización en Vivo — Antes vs. Después", size=13, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                                    ft.Icon(ft.Icons.REMOVE_RED_EYE_OUTLINED, size=14, color=ACCENT_LIGHT),
+                                    ft.Text("3. Previsualización en Vivo — Antes vs. Después", size=11, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
                                 ],
-                                spacing=8,
+                                spacing=6,
                             ),
                             self.btn_copy_clipboard,
                         ],
@@ -556,14 +533,14 @@ class BackgroundRemoverGUI:
                                         ft.Container(
                                             content=ft.Row(
                                                 controls=[
-                                                    ft.Icon(ft.Icons.IMAGE_OUTLINED, size=14, color=TEXT_MUTED),
-                                                    ft.Text("IMAGEN ORIGINAL", size=10, weight=ft.FontWeight.BOLD, color=TEXT_MUTED),
+                                                    ft.Icon(ft.Icons.IMAGE_OUTLINED, size=12, color=TEXT_MUTED),
+                                                    ft.Text("IMAGEN ORIGINAL", size=9, weight=ft.FontWeight.BOLD, color=TEXT_MUTED),
                                                 ],
-                                                spacing=6,
+                                                spacing=4,
                                             ),
                                             bgcolor="#0C1322",
-                                            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
-                                            border_radius=6,
+                                            padding=ft.Padding.symmetric(horizontal=8, vertical=2),
+                                            border_radius=4,
                                         ),
                                         ft.Container(
                                             content=ft.Stack(
@@ -577,14 +554,14 @@ class BackgroundRemoverGUI:
                                             alignment=ft.Alignment.CENTER,
                                         ),
                                     ],
-                                    spacing=8,
+                                    spacing=4,
                                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                                 ),
                                 bgcolor=CARD_INNER,
-                                border_radius=10,
-                                padding=10,
+                                border_radius=8,
+                                padding=6,
                                 expand=True,
-                                height=260,
+                                height=170,
                                 border=ft.Border.all(1, BORDER_COLOR),
                             ),
                             # Cuadro Imagen Resultado
@@ -594,14 +571,14 @@ class BackgroundRemoverGUI:
                                         ft.Container(
                                             content=ft.Row(
                                                 controls=[
-                                                    ft.Icon(ft.Icons.AUTO_AWESOME, size=14, color=SUCCESS),
-                                                    ft.Text("FONDO BLANCO / RESULTADO", size=10, weight=ft.FontWeight.BOLD, color=SUCCESS),
+                                                    ft.Icon(ft.Icons.AUTO_AWESOME, size=12, color=SUCCESS),
+                                                    ft.Text("FONDO BLANCO / RESULTADO", size=9, weight=ft.FontWeight.BOLD, color=SUCCESS),
                                                 ],
-                                                spacing=6,
+                                                spacing=4,
                                             ),
                                             bgcolor="#061F14",
-                                            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
-                                            border_radius=6,
+                                            padding=ft.Padding.symmetric(horizontal=8, vertical=2),
+                                            border_radius=4,
                                         ),
                                         ft.Container(
                                             content=ft.Stack(
@@ -615,34 +592,34 @@ class BackgroundRemoverGUI:
                                             alignment=ft.Alignment.CENTER,
                                         ),
                                     ],
-                                    spacing=8,
+                                    spacing=4,
                                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                                 ),
                                 bgcolor=CARD_INNER,
-                                border_radius=10,
-                                padding=10,
+                                border_radius=8,
+                                padding=6,
                                 expand=True,
-                                height=260,
+                                height=170,
                                 border=ft.Border.all(1, BORDER_COLOR),
                             ),
                         ],
-                        spacing=12,
+                        spacing=8,
                     ),
                 ],
-                spacing=10,
+                spacing=6,
             ),
             bgcolor=CARD_BG,
-            border_radius=12,
-            padding=14,
+            border_radius=8,
+            padding=ft.Padding.all(8),
             border=ft.Border.all(1, BORDER_COLOR),
         )
 
         # ==============================================================================
-        # 5. SECCIÓN: ESTADO DEL MOTOR IA Y REGISTRO DE CONSOLA
+        # 5. SECCIÓN: ESTADO DEL MOTOR IA Y REGISTRO DE CONSOLA (altura ~82px)
         # ==============================================================================
         self.lbl_model_status = ft.Text(
             "⚡ Selección automática activa: analiza cada imagen y aplica el modelo óptimo (SOTA RMBG).",
-            size=11,
+            size=10,
             color=TEXT_MUTED,
         )
 
@@ -650,20 +627,20 @@ class BackgroundRemoverGUI:
             value=0.0,
             color=ACCENT_LIGHT,
             bgcolor="#1E293B",
-            height=6,
-            border_radius=3,
+            height=4,
+            border_radius=2,
         )
 
         self.txt_log = ft.TextField(
             multiline=True,
             read_only=True,
-            min_lines=3,
-            max_lines=4,
-            text_size=10,
+            min_lines=2,
+            max_lines=2,
+            text_size=9.5,
             text_style=ft.TextStyle(font_family="Consolas"),
             bgcolor=CARD_INNER,
             border_color=BORDER_COLOR,
-            border_radius=8,
+            border_radius=6,
             expand=True,
         )
 
@@ -673,48 +650,41 @@ class BackgroundRemoverGUI:
                     ft.Container(
                         content=self.lbl_model_status,
                         bgcolor=CARD_INNER,
-                        border_radius=8,
-                        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                        border_radius=6,
+                        padding=ft.Padding.symmetric(horizontal=8, vertical=4),
                         border=ft.Border.all(1, BORDER_COLOR),
-                    ),
-                    ft.Row(
-                        controls=[
-                            ft.Icon(ft.Icons.TERMINAL_ROUNDED, size=15, color=TEXT_MUTED),
-                            ft.Text("4. Registro de Estado y Consola:", size=11, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
-                        ],
-                        spacing=6,
                     ),
                     self.progress_bar,
                     self.txt_log,
                 ],
-                spacing=8,
+                spacing=4,
             ),
             bgcolor=CARD_BG,
-            border_radius=12,
-            padding=14,
+            border_radius=8,
+            padding=ft.Padding.all(8),
             border=ft.Border.all(1, BORDER_COLOR),
         )
 
         # ==============================================================================
-        # 6. BARRA DE ACCIÓN INFERIOR
+        # 6. BARRA DE ACCIÓN INFERIOR (altura ~36px)
         # ==============================================================================
         self.btn_open_folder = ft.ElevatedButton(
             "📁 Abrir Carpeta Destino",
-            height=42,
+            height=36,
             bgcolor="#1E293B",
             color=TEXT_PRIMARY,
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
             on_click=self._open_output_folder,
         )
 
         self.btn_process = ft.ElevatedButton(
             "🚀 PROCESAR Y CAMBIAR A BLANCO",
-            height=42,
+            height=36,
             bgcolor=ACCENT,
             color=TEXT_PRIMARY,
             style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=10),
-                padding=ft.Padding.symmetric(horizontal=28),
+                shape=ft.RoundedRectangleBorder(radius=8),
+                padding=ft.Padding.symmetric(horizontal=24),
             ),
             on_click=self._start_processing_thread,
         )
@@ -727,7 +697,7 @@ class BackgroundRemoverGUI:
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
 
-        # Inserción en la página
+        # Inserción en la página con espaciado ultra-compacto
         page.add(
             ft.Column(
                 controls=[
@@ -738,7 +708,7 @@ class BackgroundRemoverGUI:
                     status_card,
                     actions_row,
                 ],
-                spacing=12,
+                spacing=6,
             )
         )
 
@@ -748,7 +718,7 @@ class BackgroundRemoverGUI:
     # ------------------------------------------------------------------
     # Previsualización e imágenes
     # ------------------------------------------------------------------
-    def _pil_to_base64(self, pil_img: Image.Image, max_size=(600, 360)) -> str:
+    def _pil_to_base64(self, pil_img: Image.Image, max_size=(500, 300)) -> str:
         """Convierte una imagen PIL a base64 escalándola de forma nítida."""
         img = pil_img.copy()
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
